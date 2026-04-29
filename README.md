@@ -11,7 +11,7 @@
 
 ## 下载
 
-[Releases](https://github.com/MiningCattiva/x-spider/releases/latest)
+[Releases](https://github.com/hureyqi/x-spider-mod-2026/releases/latest)
 
 ## 功能
 
