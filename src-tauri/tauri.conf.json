@@ -7,7 +7,7 @@
   },
   "package": {
     "productName": "X-Spider-二黑修改版",
-    "version": "26.0.1"
+    "version": "26.0.2"
   },
   "tauri": {
     "allowlist": {

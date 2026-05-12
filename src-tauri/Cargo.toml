@@ -1,6 +1,6 @@
 [package]
 name = "x-spider"
-version = "26.0.1"
+version = "26.0.2"
 description = "A spider for X (Twitter)"
 authors = ["you"]
 license = ""

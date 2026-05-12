@@ -28,8 +28,8 @@ export const About: React.FC = () => {
           <ul className="space-y-4 text-lg">
             <li className="flex items-center gap-2">
               <strong className="min-w-24">版本号：</strong>
-              <span>26.0.1</span>
-              {isVersionGt(latestVersion, '26.0.1') && (
+              <span>{PACKAGE_JSON_VERSION}</span>
+              {isVersionGt(latestVersion, PACKAGE_JSON_VERSION) && (
                 <span className="ml-2">
                   &nbsp;→&nbsp;
                   <a
