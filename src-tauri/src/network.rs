@@ -111,55 +111,23 @@ pub async fn network_fetch(
 
 #[tauri::command]
 pub async fn network_get_system_proxy_url() -> Result<HashMap<String, String>, ()> {
-    // 读取系统代理设置
     let mut map = HashMap::new();
     
-    // 尝试读取系统代理 (HTTP/HTTPS)
     #[cfg(target_os = "windows")]
     {
-        use std::process::Command;
+        use winreg::enums::*;
+        use winreg::RegKey;
         
-        // 通过 reg 命令读取 Windows 注册表中的代理设置
-        let output = Command::new("reg")
-            .args(&[
-                "query",
-                r"HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings",
-                "/v", "ProxyServer",
-            ])
-            .output();
-        
-        if let Ok(output) = output {
-            if output.status.success() {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                
-                // 解析类似 "ProxyServer    REG_SZ    127.0.0.1:1080" 的输出
-                for line in stdout.lines() {
-                    if line.contains("ProxyServer") {
-                        let parts: Vec<&str> = line.split_whitespace().collect();
-                        if parts.len() >= 3 {
-                            let proxy = parts[2];
-                            if !proxy.is_empty() && proxy != "(null)" {
-                                map.insert("http".to_string(), format!("http://{}", proxy));
-                                map.insert("https".to_string(), format!("http://{}", proxy));
-                            }
-                        }
-                    }
-                }
-                
-                // 检查代理是否启用
-                let enable_output = Command::new("reg")
-                    .args(&[
-                        "query",
-                        r"HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings",
-                        "/v", "ProxyEnable",
-                    ])
-                    .output();
-                
-                if let Ok(enable_out) = enable_output {
-                    let enable_stdout = String::from_utf8_lossy(&enable_out.stdout);
-                    // 如果 ProxyEnable 为 0，则清除代理
-                    if enable_stdout.contains("0x0") {
-                        return Ok(HashMap::new());
+        if let Ok(key) = RegKey::predef(HKEY_CURRENT_USER)
+            .open_subkey(r"Software\Microsoft\Windows\CurrentVersion\Internet Settings")
+        {
+            let proxy_enable: u32 = key.get_value("ProxyEnable").unwrap_or(0);
+            
+            if proxy_enable != 0 {
+                if let Ok(proxy_server) = key.get_value::<String, &str>("ProxyServer") {
+                    if !proxy_server.is_empty() {
+                        map.insert("http".to_string(), format!("http://{}", proxy_server));
+                        map.insert("https".to_string(), format!("http://{}", proxy_server));
                     }
                 }
             }
@@ -182,8 +150,6 @@ pub async fn network_get_system_proxy_url() -> Result<HashMap<String, String>, (
     
     #[cfg(target_os = "macos")]
     {
-        // macOS 可以通过 scutil --proxy 获取，但这里简化处理
-        // 主要依赖环境变量
         if let Ok(proxy) = std::env::var("http_proxy") {
             if !proxy.is_empty() {
                 map.insert("http".to_string(), proxy.clone());
