@@ -26,7 +26,7 @@ export function useBatchDownload() {
   const { createCreationTask } = useDownloadStore();
 
   const handleBatchDownload = useCallback(
-    async (listId: string) => {
+    async (listId: string, dateRangeOverride?: [number, number]) => {
       const { batchLists, updateLastUsedTime } = useBatchListStore.getState();
 
       const list = batchLists.find((l) => l.id === listId);
@@ -92,10 +92,14 @@ export function useBatchDownload() {
             }
           });
 
-          const dateRange = list.filter.dateRange
+          const effectiveDateRange = dateRangeOverride
+            ? dateRangeOverride
+            : list.filter.dateRange;
+
+          const dateRange = effectiveDateRange
             ? ([
-                dayjs(list.filter.dateRange[0] * 1000),
-                dayjs(list.filter.dateRange[1] * 1000),
+                dayjs(effectiveDateRange[0] * 1000),
+                dayjs(effectiveDateRange[1] * 1000),
               ] as [dayjs.Dayjs, dayjs.Dayjs])
             : undefined;
 

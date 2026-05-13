@@ -9,7 +9,6 @@ import {
   Popconfirm,
   Card,
   Typography,
-  DatePicker,
 } from 'antd';
 import {
   DeleteOutlined,
@@ -20,7 +19,6 @@ import React, { useState, useEffect } from 'react';
 import { useBatchListStore } from '../../stores/batch-list';
 import { BatchList } from '../../interfaces/BatchList';
 import MediaType from '../../enums/MediaType';
-import dayjs from 'dayjs';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -54,17 +52,6 @@ export const BatchListEditor: React.FC<BatchListEditorProps> = ({
   // 下载源
   const [source, setSource] = useState<'medias' | 'tweets'>('medias');
 
-  // 时间范围
-  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(
-    [dayjs.unix(0), dayjs()],
-  );
-
-  const handleDateRangeChange = (dates: any) => {
-    if (dates && dates[0] && dates[1]) {
-      setDateRange([dates[0], dates[1]]);
-    }
-  };
-
   // 账户管理
   const [accounts, setAccounts] = useState<string[]>([]);
   const [newAccountInput, setNewAccountInput] = useState('');
@@ -90,14 +77,6 @@ export const BatchListEditor: React.FC<BatchListEditorProps> = ({
         }),
       );
       setSource(list.filter.source);
-      if (list.filter.dateRange) {
-        setDateRange([
-          dayjs(list.filter.dateRange[0] * 1000),
-          dayjs(list.filter.dateRange[1] * 1000),
-        ]);
-      } else {
-        setDateRange([dayjs.unix(0), dayjs()]);
-      }
       setAccounts([...list.accounts]);
     }
   }, [list]);
@@ -165,9 +144,6 @@ export const BatchListEditor: React.FC<BatchListEditorProps> = ({
           filter: {
             mediaTypes: mediaTypeStrings as any,
             source,
-            dateRange: dateRange
-              ? [dateRange[0].unix(), dateRange[1].unix()]
-              : undefined,
           },
           accounts,
         });
@@ -179,9 +155,6 @@ export const BatchListEditor: React.FC<BatchListEditorProps> = ({
           filter: {
             mediaTypes: mediaTypeStrings as any,
             source,
-            dateRange: dateRange
-              ? [dateRange[0].unix(), dateRange[1].unix()]
-              : undefined,
           },
           accounts,
         });
@@ -259,45 +232,6 @@ export const BatchListEditor: React.FC<BatchListEditorProps> = ({
                 { label: '📱 媒体（快速）', value: 'medias' },
                 { label: '📝 帖子（完整）', value: 'tweets' },
               ]}
-              style={{ width: '100%' }}
-              size="large"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              下载时间范围
-            </label>
-            <DatePicker.RangePicker
-              presets={[
-                {
-                  label: '至今',
-                  value: [dayjs.unix(0), dayjs()],
-                },
-                {
-                  label: '最近 7 天',
-                  value: [dayjs().subtract(7, 'day'), dayjs()],
-                },
-                {
-                  label: '最近 15 天',
-                  value: [dayjs().subtract(15, 'day'), dayjs()],
-                },
-                {
-                  label: '最近 1 个月',
-                  value: [dayjs().subtract(1, 'month'), dayjs()],
-                },
-                {
-                  label: '最近 6 个月',
-                  value: [dayjs().subtract(6, 'month'), dayjs()],
-                },
-                {
-                  label: '最近 1 年',
-                  value: [dayjs().subtract(1, 'year'), dayjs()],
-                },
-              ]}
-              value={dateRange}
-              onChange={handleDateRangeChange}
-              disabledDate={(cur) => cur && cur > dayjs().endOf('day')}
               style={{ width: '100%' }}
               size="large"
             />
