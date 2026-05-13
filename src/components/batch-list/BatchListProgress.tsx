@@ -19,7 +19,7 @@ import {
   ClockCircleOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons';
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useBatchListStore } from '../../stores/batch-list';
 import { BatchList } from '../../interfaces/BatchList';
 import { useDownloadStore } from '../../stores/download';
@@ -40,14 +40,13 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
   list,
 }) => {
   const { createCreationTask } = useDownloadStore();
-  const { updateLastUsedTime } = useBatchListStore();
+  const {
+    updateLastUsedTime,
+    batchDownloadProgress,
+    setBatchDownloadProgress,
+    updateBatchDownloadProgress,
+  } = useBatchListStore();
 
-  const [isRunning, setIsRunning] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [completedAccounts, setCompletedAccounts] = useState<string[]>([]);
-  const [failedAccounts, setFailedAccounts] = useState<string[]>([]);
-  const [logs, setLogs] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(
     list.filter.dateRange
       ? [
@@ -59,32 +58,76 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
 
   const isRunningRef = useRef(false);
   const isPausedRef = useRef(false);
+  const logsRef = useRef<string[]>([]);
 
-  const addLog = (log: string) => {
-    setLogs((prev) => [...prev, `[${dayjs().format('HH:mm:ss')}] ${log}`]);
-  };
-
-  const handleStartDownload = async () => {
-    if (list.accounts.length === 0) {
-      return;
+  useEffect(() => {
+    if (batchDownloadProgress && batchDownloadProgress.listId === list.id) {
+      setDateRange(
+        batchDownloadProgress.dateRange
+          ? [
+              dayjs(batchDownloadProgress.dateRange[0] * 1000),
+              dayjs(batchDownloadProgress.dateRange[1] * 1000),
+            ]
+          : null,
+      );
     }
+  }, []);
+
+  const progress =
+    batchDownloadProgress?.listId === list.id ? batchDownloadProgress : null;
+  const isRunning = progress?.isRunning || false;
+  const isPaused = progress?.isPaused || false;
+  const currentIndex = progress?.currentIndex || 0;
+  const completedAccounts = progress?.completedAccounts || [];
+  const failedAccounts = progress?.failedAccounts || [];
+  const logs = progress?.logs || [];
+
+  const overallProgress =
+    list.accounts.length > 0
+      ? Math.round(
+          ((completedAccounts.length + failedAccounts.length) /
+            list.accounts.length) *
+            100,
+        )
+      : 0;
+
+  const remaining =
+    list.accounts.length - completedAccounts.length - failedAccounts.length;
+
+  const handleStartDownload = useCallback(async () => {
+    if (list.accounts.length === 0) return;
 
     updateLastUsedTime(list.id);
-
-    isRunningRef.current = true;
-    isPausedRef.current = false;
-    setIsRunning(true);
-    setIsPaused(false);
 
     const effectiveDateRange = dateRange
       ? ([dateRange[0].unix(), dateRange[1].unix()] as [number, number])
       : list.filter.dateRange;
 
-    addLog(`开始批量下载，共 ${list.accounts.length} 个账户`);
+    isRunningRef.current = true;
+    isPausedRef.current = false;
+    logsRef.current = [
+      `[${dayjs().format('HH:mm:ss')}] 开始批量下载，共 ${list.accounts.length} 个账户`,
+    ];
+
+    setBatchDownloadProgress({
+      listId: list.id,
+      isRunning: true,
+      isPaused: false,
+      currentIndex: 0,
+      currentAccount: '',
+      totalAccounts: list.accounts.length,
+      completedAccounts: [],
+      failedAccounts: [],
+      successCount: 0,
+      failCount: 0,
+      logs: [...logsRef.current],
+      dateRange: effectiveDateRange,
+    });
 
     for (let i = 0; i < list.accounts.length; i++) {
       if (!isRunningRef.current) {
-        addLog('下载已停止');
+        logsRef.current.push(`[${dayjs().format('HH:mm:ss')}] 下载已停止`);
+        updateBatchDownloadProgress({ logs: [...logsRef.current] });
         break;
       }
 
@@ -93,14 +136,20 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
       }
 
       if (!isRunningRef.current) {
-        addLog('下载已停止');
+        logsRef.current.push(`[${dayjs().format('HH:mm:ss')}] 下载已停止`);
+        updateBatchDownloadProgress({ logs: [...logsRef.current] });
         break;
       }
 
       const account = list.accounts[i];
-      setCurrentIndex(i);
-
-      addLog(`正在处理 @${account} (${i + 1}/${list.accounts.length})`);
+      logsRef.current.push(
+        `[${dayjs().format('HH:mm:ss')}] 正在处理 @${account} (${i + 1}/${list.accounts.length})`,
+      );
+      updateBatchDownloadProgress({
+        currentIndex: i,
+        currentAccount: account,
+        logs: [...logsRef.current],
+      });
 
       try {
         const user: TwitterUser = await getUser(account);
@@ -131,13 +180,31 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
           dateRange: dr,
         });
 
-        setCompletedAccounts((prev) => [...prev, account]);
-        addLog(`✓ @${account} 任务已创建`);
+        const completed = [
+          ...logsRef.current,
+          `[${dayjs().format('HH:mm:ss')}] ✓ @${account} 任务已创建`,
+        ];
+        logsRef.current = completed;
+        const latest = useBatchListStore.getState().batchDownloadProgress;
+        updateBatchDownloadProgress({
+          completedAccounts: [...(latest?.completedAccounts || []), account],
+          successCount: (latest?.successCount || 0) + 1,
+          logs: completed,
+        });
 
         await new Promise((resolve) => setTimeout(resolve, 1000));
       } catch (err: any) {
-        setFailedAccounts((prev) => [...prev, account]);
-        addLog(`✗ @${account} 失败: ${err.message}`);
+        const failed = [
+          ...logsRef.current,
+          `[${dayjs().format('HH:mm:ss')}]  @${account} 失败: ${err.message}`,
+        ];
+        logsRef.current = failed;
+        const latest2 = useBatchListStore.getState().batchDownloadProgress;
+        updateBatchDownloadProgress({
+          failedAccounts: [...(latest2?.failedAccounts || []), account],
+          failCount: (latest2?.failCount || 0) + 1,
+          logs: failed,
+        });
 
         notification.warning({
           message: `账户 ${account} 下载失败`,
@@ -152,65 +219,70 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
     }
 
     isRunningRef.current = false;
-    setIsRunning(false);
-    setIsPaused(false);
+    const done = [
+      ...logsRef.current,
+      `[${dayjs().format('HH:mm:ss')}] 批量下载完成！`,
+    ];
+    logsRef.current = done;
+    updateBatchDownloadProgress({
+      isRunning: false,
+      isPaused: false,
+      logs: done,
+    });
+  }, [
+    list,
+    dateRange,
+    createCreationTask,
+    updateBatchDownloadProgress,
+    setBatchDownloadProgress,
+    updateLastUsedTime,
+  ]);
 
-    addLog('批量下载完成！');
-  };
-
-  const handlePause = () => {
+  const handlePause = useCallback(() => {
     if (isRunningRef.current && !isPausedRef.current) {
       isPausedRef.current = true;
-      setIsPaused(true);
-      addLog('暂停下载');
+      logsRef.current.push(`[${dayjs().format('HH:mm:ss')}] 暂停下载`);
+      updateBatchDownloadProgress({
+        isPaused: true,
+        logs: [...logsRef.current],
+      });
     }
-  };
+  }, [updateBatchDownloadProgress]);
 
-  const handleResume = () => {
+  const handleResume = useCallback(() => {
     if (isRunningRef.current && isPausedRef.current) {
       isPausedRef.current = false;
-      setIsPaused(false);
-      addLog('继续下载');
+      logsRef.current.push(`[${dayjs().format('HH:mm:ss')}] 继续下载`);
+      updateBatchDownloadProgress({
+        isPaused: false,
+        logs: [...logsRef.current],
+      });
     }
-  };
+  }, [updateBatchDownloadProgress]);
 
-  const handleStop = () => {
+  const handleStop = useCallback(() => {
     if (isRunningRef.current) {
       isRunningRef.current = false;
       isPausedRef.current = false;
-      setIsRunning(false);
-      setIsPaused(false);
       const { creationTasks, removeCreationTask } = useDownloadStore.getState();
       for (const task of creationTasks) {
         removeCreationTask(task.id);
       }
-      addLog('已停止');
+      logsRef.current.push(`[${dayjs().format('HH:mm:ss')}] 已停止`);
+      updateBatchDownloadProgress({
+        isRunning: false,
+        isPaused: false,
+        logs: [...logsRef.current],
+      });
     }
-  };
+  }, [updateBatchDownloadProgress]);
 
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     isRunningRef.current = false;
     isPausedRef.current = false;
-    setIsRunning(false);
-    setIsPaused(false);
-    setCurrentIndex(0);
-    setCompletedAccounts([]);
-    setFailedAccounts([]);
-    setLogs([]);
-    addLog('已重置');
-  };
-
-  const overallProgress =
-    list.accounts.length > 0
-      ? Math.round(
-          ((completedAccounts.length + failedAccounts.length) /
-            list.accounts.length) *
-            100,
-        )
-      : 0;
-
-  const remaining =
-    list.accounts.length - completedAccounts.length - failedAccounts.length;
+    logsRef.current = [];
+    setBatchDownloadProgress(null);
+  }, [setBatchDownloadProgress]);
 
   return (
     <div
@@ -224,7 +296,6 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
         overflow: 'hidden',
       }}
     >
-      {/* 背景装饰 */}
       <div
         style={{
           position: 'absolute',
@@ -250,7 +321,6 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
         }}
       />
 
-      {/* 头部 */}
       <div style={{ position: 'relative', zIndex: 1, marginBottom: 24 }}>
         <div
           style={{
@@ -314,7 +384,6 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
           </div>
         </div>
 
-        {/* 媒体类型标签 */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           {list.filter.mediaTypes.map((type) => (
             <Tag
@@ -356,7 +425,6 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
         </div>
       </div>
 
-      {/* 日期范围选择器 */}
       <div style={{ position: 'relative', zIndex: 1, marginBottom: 16 }}>
         <Text
           style={{
@@ -407,7 +475,6 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
         />
       </div>
 
-      {/* 统计卡片 */}
       <Row
         gutter={[12, 12]}
         style={{ marginBottom: 20, position: 'relative', zIndex: 1 }}
@@ -514,7 +581,6 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
         </Col>
       </Row>
 
-      {/* 进度条 */}
       <div style={{ marginBottom: 20, position: 'relative', zIndex: 1 }}>
         <Progress
           percent={overallProgress}
@@ -548,7 +614,6 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
         </div>
       </div>
 
-      {/* 控制按钮 */}
       <div
         style={{
           display: 'flex',
@@ -641,7 +706,6 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
         </Button>
       </div>
 
-      {/* 账户列表 */}
       {(completedAccounts.length > 0 || failedAccounts.length > 0) && (
         <Row
           gutter={12}
@@ -742,7 +806,6 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
         </Row>
       )}
 
-      {/* 日志面板 */}
       <div
         style={{
           background: '#0a0f1a',
@@ -778,7 +841,10 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
           <Button
             size="small"
             type="text"
-            onClick={() => setLogs([])}
+            onClick={() => {
+              logsRef.current = [];
+              updateBatchDownloadProgress({ logs: [] });
+            }}
             style={{
               color: '#6b7280',
               fontSize: 11,

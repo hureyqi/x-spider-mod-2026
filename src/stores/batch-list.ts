@@ -5,6 +5,7 @@ import { createTauriFileStorage } from './persist/tauri-file-storage';
 import { BatchList, BatchDownloadTask } from '../interfaces/BatchList';
 
 export interface BatchDownloadProgress {
+  listId: string;
   isRunning: boolean;
   isPaused: boolean;
   currentIndex: number;
@@ -15,6 +16,7 @@ export interface BatchDownloadProgress {
   successCount: number;
   failCount: number;
   logs: string[];
+  dateRange?: [number, number];
 }
 
 export interface BatchListStore {
@@ -22,27 +24,38 @@ export interface BatchListStore {
   currentBatchListId: string | null;
   batchDownloadTask: BatchDownloadTask | null;
   batchDownloadProgress: BatchDownloadProgress | null;
-  
+
   createBatchList: (name: string, description?: string) => BatchList;
   updateBatchList: (id: string, updates: Partial<BatchList>) => void;
   deleteBatchList: (id: string) => void;
   duplicateBatchList: (id: string) => BatchList;
-  
+
   addAccountsToList: (listId: string, accounts: string[]) => void;
   removeAccountFromList: (listId: string, account: string) => void;
-  updateAccountInList: (listId: string, oldAccount: string, newAccount: string) => void;
+  updateAccountInList: (
+    listId: string,
+    oldAccount: string,
+    newAccount: string,
+  ) => void;
   clearAccountsFromList: (listId: string) => void;
   importAccountsToList: (listId: string, accounts: string[]) => void;
-  
+
   setCurrentBatchList: (listId: string | null) => void;
   getCurrentBatchList: () => BatchList | null;
-  
+
   setBatchDownloadTask: (task: BatchDownloadTask | null) => void;
   updateBatchDownloadTask: (updates: Partial<BatchDownloadTask>) => void;
-  
-  setBatchDownloadProgress: (progress: BatchDownloadProgress | null) => void;
-  updateBatchDownloadProgress: (updates: Partial<BatchDownloadProgress>) => void;
-  
+
+  setBatchDownloadProgress: (
+    progress:
+      | BatchDownloadProgress
+      | null
+      | ((prev: BatchDownloadProgress | null) => BatchDownloadProgress | null),
+  ) => void;
+  updateBatchDownloadProgress: (
+    updates: Partial<BatchDownloadProgress>,
+  ) => void;
+
   updateLastUsedTime: (listId: string) => void;
   getLastUsedTime: (listId: string) => number | undefined;
 }
@@ -81,7 +94,7 @@ export const useBatchListStore = create<BatchListStore>()(
           batchLists: state.batchLists.map((list) =>
             list.id === id
               ? { ...list, ...updates, updatedAt: Date.now() }
-              : list
+              : list,
           ),
         }));
       },
@@ -123,7 +136,7 @@ export const useBatchListStore = create<BatchListStore>()(
                   accounts: [...new Set([...list.accounts, ...accounts])],
                   updatedAt: Date.now(),
                 }
-              : list
+              : list,
           ),
         }));
       },
@@ -137,7 +150,7 @@ export const useBatchListStore = create<BatchListStore>()(
                   accounts: list.accounts.filter((a) => a !== account),
                   updatedAt: Date.now(),
                 }
-              : list
+              : list,
           ),
         }));
       },
@@ -149,11 +162,11 @@ export const useBatchListStore = create<BatchListStore>()(
               ? {
                   ...list,
                   accounts: list.accounts.map((a) =>
-                    a === oldAccount ? newAccount : a
+                    a === oldAccount ? newAccount : a,
                   ),
                   updatedAt: Date.now(),
                 }
-              : list
+              : list,
           ),
         }));
       },
@@ -163,7 +176,7 @@ export const useBatchListStore = create<BatchListStore>()(
           batchLists: state.batchLists.map((list) =>
             list.id === listId
               ? { ...list, accounts: [], updatedAt: Date.now() }
-              : list
+              : list,
           ),
         }));
       },
@@ -178,10 +191,12 @@ export const useBatchListStore = create<BatchListStore>()(
             list.id === listId
               ? {
                   ...list,
-                  accounts: [...new Set([...list.accounts, ...cleanedAccounts])],
+                  accounts: [
+                    ...new Set([...list.accounts, ...cleanedAccounts]),
+                  ],
                   updatedAt: Date.now(),
                 }
-              : list
+              : list,
           ),
         }));
       },
@@ -193,8 +208,9 @@ export const useBatchListStore = create<BatchListStore>()(
       getCurrentBatchList: () => {
         const state = get();
         return (
-          state.batchLists.find((list) => list.id === state.currentBatchListId) ||
-          null
+          state.batchLists.find(
+            (list) => list.id === state.currentBatchListId,
+          ) || null
         );
       },
 
@@ -211,7 +227,13 @@ export const useBatchListStore = create<BatchListStore>()(
       },
 
       setBatchDownloadProgress: (progress) => {
-        set({ batchDownloadProgress: progress });
+        if (typeof progress === 'function') {
+          set((state) => ({
+            batchDownloadProgress: progress(state.batchDownloadProgress),
+          }));
+        } else {
+          set({ batchDownloadProgress: progress });
+        }
       },
 
       updateBatchDownloadProgress: (updates) => {
@@ -225,9 +247,7 @@ export const useBatchListStore = create<BatchListStore>()(
       updateLastUsedTime: (listId) => {
         set((state) => ({
           batchLists: state.batchLists.map((list) =>
-            list.id === listId
-              ? { ...list, lastUsedAt: Date.now() }
-              : list
+            list.id === listId ? { ...list, lastUsedAt: Date.now() } : list,
           ),
         }));
       },
@@ -241,6 +261,6 @@ export const useBatchListStore = create<BatchListStore>()(
       name: 'batch-lists',
       storage: createTauriFileStorage(),
       version: 1,
-    }
-  )
+    },
+  ),
 );
