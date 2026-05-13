@@ -24,6 +24,7 @@ export interface Settings_V2 {
   download: {
     saveDirBase: string;
     dirTemplate: string;
+    folderMode: 'default' | 'template';
     fileNameTemplate: string;
     sameFileSkip: boolean;
   };

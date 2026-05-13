@@ -9,6 +9,7 @@ import {
   DatePicker,
 } from 'antd';
 import {
+  DeleteOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
   LoadingOutlined,
@@ -45,6 +46,7 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
     batchDownloadProgress,
     setBatchDownloadProgress,
     updateBatchDownloadProgress,
+    removeAccountsFromList,
   } = useBatchListStore();
 
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(
@@ -283,6 +285,23 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
     logsRef.current = [];
     setBatchDownloadProgress(null);
   }, [setBatchDownloadProgress]);
+
+  const handleRemoveFailedAccounts = useCallback(() => {
+    if (failedAccounts.length === 0) return;
+    removeAccountsFromList(list.id, failedAccounts);
+    updateBatchDownloadProgress({
+      failedAccounts: [],
+      failCount: 0,
+    });
+    logsRef.current.push(
+      `[${dayjs().format('HH:mm:ss')}] 已删除 ${failedAccounts.length} 个失败账户`,
+    );
+    updateBatchDownloadProgress({ logs: [...logsRef.current] });
+    notification.success({
+      message: '删除成功',
+      description: `已移除 ${failedAccounts.length} 个失败账户`,
+    });
+  }, [list.id, failedAccounts, removeAccountsFromList, updateBatchDownloadProgress]);
 
   return (
     <div
@@ -771,16 +790,31 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 6,
+                    justifyContent: 'space-between',
                     marginBottom: 8,
                   }}
                 >
-                  <CloseCircleOutlined style={{ color: '#ef4444' }} />
-                  <Text
-                    style={{ color: '#ef4444', fontSize: 12, fontWeight: 600 }}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <CloseCircleOutlined style={{ color: '#ef4444' }} />
+                    <Text
+                      style={{ color: '#ef4444', fontSize: 12, fontWeight: 600 }}
+                    >
+                      失败 ({failedAccounts.length})
+                    </Text>
+                  </div>
+                  <Button
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={handleRemoveFailedAccounts}
+                    style={{
+                      fontSize: 11,
+                      height: 22,
+                      padding: '0 8px',
+                    }}
                   >
-                    失败 ({failedAccounts.length})
-                  </Text>
+                    一键删除
+                  </Button>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {failedAccounts.map((account) => (

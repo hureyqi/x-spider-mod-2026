@@ -7,7 +7,7 @@
   },
   "package": {
     "productName": "X-Spider-二黑修改版",
-    "version": "26.0.3"
+    "version": "26.0.4"
   },
   "tauri": {
     "allowlist": {
@@ -57,7 +57,8 @@
     "bundle": {
       "active": true,
       "targets": [
-        "nsis"
+        "nsis",
+        "app"
       ],
       "identifier": "x-spider",
       "icon": [

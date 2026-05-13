@@ -8,10 +8,16 @@ import Joi from 'joi';
 import { SavePathSelector } from '../components/settings/SavePathSelector';
 import { Button, Input, Switch } from 'antd';
 import { FileNameTemplateInput } from '../components/settings/FileNameTemplateInput';
+import { FolderModeSelector } from '../components/settings/FolderModeSelector';
+import { useSettings } from '../hooks/useSettings';
 import { showInFolder } from '../utils/shell';
 import { path } from '@tauri-apps/api';
 
 export const Settings: React.FC = () => {
+  const { value: folderMode } = useSettings('download', 'folderMode');
+
+  const isDefaultMode = folderMode === 'default';
+
   return (
     <>
       <PageHeader />
@@ -29,6 +35,15 @@ export const Settings: React.FC = () => {
         >
           <SavePathSelector required />
         </Item>
+
+        <Item
+          label="文件夹模式"
+          settingKey="folderMode"
+          description="默认模式：按博主用户名自动创建文件夹 | 模板模式：使用自定义变量模板"
+        >
+          <FolderModeSelector />
+        </Item>
+
         <Item
           validator={(value) => {
             return Joi.string()
@@ -46,9 +61,13 @@ export const Settings: React.FC = () => {
           }}
           label="文件夹模板"
           settingKey="dirTemplate"
-          description="为空时下载的文件直接保存在上方的“保存路径”里面"
+          description={
+            isDefaultMode
+              ? '当前为默认模式，将按博主用户名自动创建文件夹'
+              : '为空时下载的文件直接保存在上方的"保存路径"里面'
+          }
         >
-          <FileNameTemplateInput />
+          <FileNameTemplateInput showVariables={!isDefaultMode} />
         </Item>
         <Item
           settingKey="fileNameTemplate"
@@ -101,11 +120,11 @@ export const Settings: React.FC = () => {
               .uri({
                 scheme: ['http'],
               })
-              .message('代理地址格式不正确，示例：“http://127.0.0.1:7890”')
+              .message('代理地址格式不正确，示例："http://127.0.0.1:7890"')
               .validate(val).error?.message;
           }}
         >
-          <Input placeholder="代理地址，例如：“http://127.0.0.1:7890”" />
+          <Input placeholder="代理地址，例如：http://127.0.0.1:7890" />
         </Item>
       </Section>
       <Section title="应用" name="app">

@@ -70,8 +70,17 @@ async function prepareDownloadTask({
     post,
   };
 
-  // 强制路径：下载目录 / 博主用户名
-  const dir = await path.join(settings.download.saveDirBase, safeBloggerName);
+  let dir: string;
+  if (settings.download.folderMode === 'template') {
+    dir = settings.download.dirTemplate
+      ? await path.join(
+          settings.download.saveDirBase,
+          resolveVariables(settings.download.dirTemplate, templateData),
+        )
+      : settings.download.saveDirBase;
+  } else {
+    dir = await path.join(settings.download.saveDirBase, safeBloggerName);
+  }
   
   log().info('resolved dirName', safeBloggerName);
   log().info('resolved dir', dir);

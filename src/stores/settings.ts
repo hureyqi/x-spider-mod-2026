@@ -52,6 +52,12 @@ export const useSettingsStore = create(
           delete state.download.savePath;
         }
 
+        if (version <= 2) {
+          if (!state.download.folderMode) {
+            state.download.folderMode = 'default';
+          }
+        }
+
         return state;
       },
     },

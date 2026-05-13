@@ -32,6 +32,7 @@ export interface BatchListStore {
 
   addAccountsToList: (listId: string, accounts: string[]) => void;
   removeAccountFromList: (listId: string, account: string) => void;
+  removeAccountsFromList: (listId: string, accounts: string[]) => void;
   updateAccountInList: (
     listId: string,
     oldAccount: string,
@@ -148,6 +149,22 @@ export const useBatchListStore = create<BatchListStore>()(
               ? {
                   ...list,
                   accounts: list.accounts.filter((a) => a !== account),
+                  updatedAt: Date.now(),
+                }
+              : list,
+          ),
+        }));
+      },
+
+      removeAccountsFromList: (listId, accountsToRemove) => {
+        set((state) => ({
+          batchLists: state.batchLists.map((list) =>
+            list.id === listId
+              ? {
+                  ...list,
+                  accounts: list.accounts.filter(
+                    (a) => !accountsToRemove.includes(a),
+                  ),
                   updatedAt: Date.now(),
                 }
               : list,
