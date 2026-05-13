@@ -1,9 +1,26 @@
-import { Button, Space, Input, Checkbox, Select, Divider, Tag, Popconfirm, Card, Typography } from 'antd';
-import { DeleteOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons';
+import {
+  Button,
+  Space,
+  Input,
+  Checkbox,
+  Select,
+  Divider,
+  Tag,
+  Popconfirm,
+  Card,
+  Typography,
+  DatePicker,
+} from 'antd';
+import {
+  DeleteOutlined,
+  PlusOutlined,
+  UploadOutlined,
+} from '@ant-design/icons';
 import React, { useState, useEffect } from 'react';
 import { useBatchListStore } from '../../stores/batch-list';
 import { BatchList } from '../../interfaces/BatchList';
 import MediaType from '../../enums/MediaType';
+import dayjs from 'dayjs';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -22,21 +39,32 @@ export const BatchListEditor: React.FC<BatchListEditorProps> = ({
   const { createBatchList, updateBatchList } = useBatchListStore();
 
   const isEditing = !!list;
-  
+
   // 基础信息
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  
+
   // 媒体类型
   const [mediaTypes, setMediaTypes] = useState<MediaType[]>([
     MediaType.Photo,
     MediaType.Video,
     MediaType.Gif,
   ]);
-  
+
   // 下载源
   const [source, setSource] = useState<'medias' | 'tweets'>('medias');
-  
+
+  // 时间范围
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(
+    [dayjs.unix(0), dayjs()],
+  );
+
+  const handleDateRangeChange = (dates: any) => {
+    if (dates && dates[0] && dates[1]) {
+      setDateRange([dates[0], dates[1]]);
+    }
+  };
+
   // 账户管理
   const [accounts, setAccounts] = useState<string[]>([]);
   const [newAccountInput, setNewAccountInput] = useState('');
@@ -47,15 +75,29 @@ export const BatchListEditor: React.FC<BatchListEditorProps> = ({
     if (list) {
       setName(list.name);
       setDescription(list.description || '');
-      setMediaTypes(list.filter.mediaTypes.map((t) => {
-        switch (t) {
-          case 'photo': return MediaType.Photo;
-          case 'video': return MediaType.Video;
-          case 'gif': return MediaType.Gif;
-          default: return MediaType.Photo;
-        }
-      }));
+      setMediaTypes(
+        list.filter.mediaTypes.map((t) => {
+          switch (t) {
+            case 'photo':
+              return MediaType.Photo;
+            case 'video':
+              return MediaType.Video;
+            case 'gif':
+              return MediaType.Gif;
+            default:
+              return MediaType.Photo;
+          }
+        }),
+      );
       setSource(list.filter.source);
+      if (list.filter.dateRange) {
+        setDateRange([
+          dayjs(list.filter.dateRange[0] * 1000),
+          dayjs(list.filter.dateRange[1] * 1000),
+        ]);
+      } else {
+        setDateRange([dayjs.unix(0), dayjs()]);
+      }
       setAccounts([...list.accounts]);
     }
   }, [list]);
@@ -76,8 +118,10 @@ export const BatchListEditor: React.FC<BatchListEditorProps> = ({
       .split(/[\n,;]/)
       .map((a) => a.trim().toLowerCase())
       .filter((a) => a && !a.startsWith('@'));
-    
-    const uniqueNewAccounts = parsedAccounts.filter((a) => !accounts.includes(a));
+
+    const uniqueNewAccounts = parsedAccounts.filter(
+      (a) => !accounts.includes(a),
+    );
     if (uniqueNewAccounts.length > 0) {
       setAccounts([...accounts, ...uniqueNewAccounts]);
       setBatchImportInput('');
@@ -103,10 +147,14 @@ export const BatchListEditor: React.FC<BatchListEditorProps> = ({
     try {
       const mediaTypeStrings = mediaTypes.map((t) => {
         switch (t) {
-          case MediaType.Photo: return 'photo';
-          case MediaType.Video: return 'video';
-          case MediaType.Gif: return 'gif';
-          default: return 'photo';
+          case MediaType.Photo:
+            return 'photo';
+          case MediaType.Video:
+            return 'video';
+          case MediaType.Gif:
+            return 'gif';
+          default:
+            return 'photo';
         }
       });
 
@@ -117,6 +165,9 @@ export const BatchListEditor: React.FC<BatchListEditorProps> = ({
           filter: {
             mediaTypes: mediaTypeStrings as any,
             source,
+            dateRange: dateRange
+              ? [dateRange[0].unix(), dateRange[1].unix()]
+              : undefined,
           },
           accounts,
         });
@@ -128,13 +179,16 @@ export const BatchListEditor: React.FC<BatchListEditorProps> = ({
           filter: {
             mediaTypes: mediaTypeStrings as any,
             source,
+            dateRange: dateRange
+              ? [dateRange[0].unix(), dateRange[1].unix()]
+              : undefined,
           },
           accounts,
         });
       }
       onSuccess();
     } catch (err) {
-      console.error('Failed to save list:', err);
+      // save error silently
     }
   };
 
@@ -144,7 +198,9 @@ export const BatchListEditor: React.FC<BatchListEditorProps> = ({
       <Card size="small" title="基本信息">
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">列表名称 *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              列表名称 *
+            </label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -152,9 +208,11 @@ export const BatchListEditor: React.FC<BatchListEditorProps> = ({
               size="large"
             />
           </div>
-          
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">描述（可选）</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              描述（可选）
+            </label>
             <TextArea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -169,7 +227,9 @@ export const BatchListEditor: React.FC<BatchListEditorProps> = ({
       <Card size="small" title="下载设置">
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">媒体类型</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              媒体类型
+            </label>
             <Checkbox.Group value={mediaTypes} onChange={setMediaTypes}>
               <Space direction="vertical">
                 <Checkbox value={MediaType.Photo}>
@@ -184,7 +244,7 @@ export const BatchListEditor: React.FC<BatchListEditorProps> = ({
               </Space>
             </Checkbox.Group>
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               下载源
@@ -203,12 +263,51 @@ export const BatchListEditor: React.FC<BatchListEditorProps> = ({
               size="large"
             />
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              下载时间范围
+            </label>
+            <DatePicker.RangePicker
+              presets={[
+                {
+                  label: '至今',
+                  value: [dayjs.unix(0), dayjs()],
+                },
+                {
+                  label: '最近 7 天',
+                  value: [dayjs().subtract(7, 'day'), dayjs()],
+                },
+                {
+                  label: '最近 15 天',
+                  value: [dayjs().subtract(15, 'day'), dayjs()],
+                },
+                {
+                  label: '最近 1 个月',
+                  value: [dayjs().subtract(1, 'month'), dayjs()],
+                },
+                {
+                  label: '最近 6 个月',
+                  value: [dayjs().subtract(6, 'month'), dayjs()],
+                },
+                {
+                  label: '最近 1 年',
+                  value: [dayjs().subtract(1, 'year'), dayjs()],
+                },
+              ]}
+              value={dateRange}
+              onChange={handleDateRangeChange}
+              disabledDate={(cur) => cur && cur > dayjs().endOf('day')}
+              style={{ width: '100%' }}
+              size="large"
+            />
+          </div>
         </div>
       </Card>
 
       {/* 账户管理 */}
-      <Card 
-        size="small" 
+      <Card
+        size="small"
         title={
           <div className="flex justify-between items-center">
             <span>账户管理 ({accounts.length} 个)</span>
@@ -230,7 +329,9 @@ export const BatchListEditor: React.FC<BatchListEditorProps> = ({
         <div className="space-y-4">
           {/* 单个添加 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">添加单个账户</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              添加单个账户
+            </label>
             <Space.Compact className="w-full">
               <Input
                 value={newAccountInput}
@@ -238,8 +339,8 @@ export const BatchListEditor: React.FC<BatchListEditorProps> = ({
                 placeholder="输入用户名（不含 @）"
                 onPressEnter={handleAddSingleAccount}
               />
-              <Button 
-                type="primary" 
+              <Button
+                type="primary"
                 icon={<PlusOutlined />}
                 onClick={handleAddSingleAccount}
               >
@@ -252,7 +353,9 @@ export const BatchListEditor: React.FC<BatchListEditorProps> = ({
 
           {/* 批量导入 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">批量导入</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              批量导入
+            </label>
             <TextArea
               value={batchImportInput}
               onChange={(e) => setBatchImportInput(e.target.value)}
@@ -260,8 +363,8 @@ export const BatchListEditor: React.FC<BatchListEditorProps> = ({
               rows={4}
               className="mb-2"
             />
-            <Button 
-              type="default" 
+            <Button
+              type="default"
               icon={<UploadOutlined />}
               onClick={handleBatchImport}
               disabled={!batchImportInput.trim()}
@@ -301,9 +404,9 @@ export const BatchListEditor: React.FC<BatchListEditorProps> = ({
           <Button onClick={onCancel} size="large">
             取消
           </Button>
-          <Button 
-            type="primary" 
-            onClick={handleSubmit} 
+          <Button
+            type="primary"
+            onClick={handleSubmit}
             size="large"
             disabled={!name.trim()}
           >

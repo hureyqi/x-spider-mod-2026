@@ -6,6 +6,7 @@ export interface BatchList {
   filter: {
     mediaTypes: ('photo' | 'video' | 'gif')[];
     source: 'medias' | 'tweets';
+    dateRange?: [start: number, end: number];
   };
   createdAt: number;
   updatedAt: number;

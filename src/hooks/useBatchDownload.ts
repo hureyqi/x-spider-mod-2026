@@ -5,6 +5,7 @@ import { TwitterUser } from '../interfaces/TwitterUser';
 import MediaType from '../enums/MediaType';
 import { notification } from 'antd';
 import { notification as tauriNotification } from '@tauri-apps/api';
+import dayjs from 'dayjs';
 
 export interface BatchProgress {
   isRunning: boolean;
@@ -21,123 +22,147 @@ export interface BatchProgress {
 
 export function useBatchDownload() {
   const [progress, setProgress] = useState<BatchProgress | null>(null);
-  
+
   const { createCreationTask } = useDownloadStore();
 
-  const handleBatchDownload = useCallback(async (listId: string) => {
-    const { batchLists, updateLastUsedTime } = useBatchListStore.getState();
-    
-    const list = batchLists.find((l) => l.id === listId);
-    if (!list) {
-      notification.error({ message: '列表不存在' });
-      return;
-    }
+  const handleBatchDownload = useCallback(
+    async (listId: string) => {
+      const { batchLists, updateLastUsedTime } = useBatchListStore.getState();
 
-    if (list.accounts.length === 0) {
-      notification.warning({ message: '列表为空，请先添加账户' });
-      return;
-    }
+      const list = batchLists.find((l) => l.id === listId);
+      if (!list) {
+        notification.error({ message: '列表不存在' });
+        return;
+      }
 
-    updateLastUsedTime(listId);
+      if (list.accounts.length === 0) {
+        notification.warning({ message: '列表为空，请先添加账户' });
+        return;
+      }
 
-    const timestamp = new Date().toLocaleTimeString();
-    setProgress({
-      isRunning: true,
-      isPaused: false,
-      currentIndex: 0,
-      currentAccount: '',
-      totalAccounts: list.accounts.length,
-      completedAccounts: [],
-      failedAccounts: [],
-      successCount: 0,
-      failCount: 0,
-      logs: [
-        `[${timestamp}] 开始批量下载: ${list.name}`,
-        `[${timestamp}] 总计 ${list.accounts.length} 个账户`,
-      ],
-    });
+      updateLastUsedTime(listId);
 
-    const { getUser } = await import('../twitter/api');
+      const timestamp = new Date().toLocaleTimeString();
+      setProgress({
+        isRunning: true,
+        isPaused: false,
+        currentIndex: 0,
+        currentAccount: '',
+        totalAccounts: list.accounts.length,
+        completedAccounts: [],
+        failedAccounts: [],
+        successCount: 0,
+        failCount: 0,
+        logs: [
+          `[${timestamp}] 开始批量下载: ${list.name}`,
+          `[${timestamp}] 总计 ${list.accounts.length} 个账户`,
+        ],
+      });
 
-    for (let i = 0; i < list.accounts.length; i++) {
-      setProgress(prev => {
-        if (!prev || !prev.isRunning) return prev;
+      const { getUser } = await import('../twitter/api');
+
+      for (let i = 0; i < list.accounts.length; i++) {
+        setProgress((prev) => {
+          if (!prev || !prev.isRunning) return prev;
+          const ts = new Date().toLocaleTimeString();
+          return {
+            ...prev,
+            currentAccount: list.accounts[i],
+            currentIndex: i,
+            logs: [
+              ...prev.logs,
+              `[${ts}] 正在处理 @${list.accounts[i]} (${i + 1}/${list.accounts.length})`,
+            ],
+          };
+        });
+
+        try {
+          const user: TwitterUser = await getUser(list.accounts[i]);
+
+          const mediaTypes = list.filter.mediaTypes.map((type) => {
+            switch (type) {
+              case 'photo':
+                return MediaType.Photo;
+              case 'video':
+                return MediaType.Video;
+              case 'gif':
+                return MediaType.Gif;
+              default:
+                return MediaType.Photo;
+            }
+          });
+
+          const dateRange = list.filter.dateRange
+            ? ([
+                dayjs(list.filter.dateRange[0] * 1000),
+                dayjs(list.filter.dateRange[1] * 1000),
+              ] as [dayjs.Dayjs, dayjs.Dayjs])
+            : undefined;
+
+          createCreationTask(user, {
+            mediaTypes,
+            source: list.filter.source,
+            dateRange,
+          });
+
+          setProgress((prev) => {
+            if (!prev) return null;
+            const ts = new Date().toLocaleTimeString();
+            return {
+              ...prev,
+              completedAccounts: [...prev.completedAccounts, list.accounts[i]],
+              successCount: prev.successCount + 1,
+              logs: [
+                ...prev.logs,
+                `[${ts}] ✅ @${list.accounts[i]} 任务已创建`,
+              ],
+            };
+          });
+
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        } catch (err: any) {
+          setProgress((prev) => {
+            if (!prev) return null;
+            const ts = new Date().toLocaleTimeString();
+            return {
+              ...prev,
+              failedAccounts: [...prev.failedAccounts, list.accounts[i]],
+              failCount: prev.failCount + 1,
+              logs: [
+                ...prev.logs,
+                `[${ts}] ❌ @${list.accounts[i]} 失败: ${err.message}`,
+              ],
+            };
+          });
+
+          notification.warning({
+            message: `账户 ${list.accounts[i]} 下载失败`,
+            description: err.message,
+          });
+
+          tauriNotification.sendNotification({
+            title: '批量下载提醒',
+            body: `@${list.accounts[i]} 下载失败: ${err.message}`,
+          });
+        }
+      }
+
+      setProgress((prev) => {
+        if (!prev) return null;
         const ts = new Date().toLocaleTimeString();
         return {
           ...prev,
-          currentAccount: list.accounts[i],
-          currentIndex: i,
-          logs: [...prev.logs, `[${ts}] 正在处理 @${list.accounts[i]} (${i + 1}/${list.accounts.length})`],
+          isRunning: false,
+          isPaused: false,
+          logs: [...prev.logs, `[${ts}] 批量下载完成！`],
         };
       });
-
-      try {
-        const user: TwitterUser = await getUser(list.accounts[i]);
-        
-        const mediaTypes = list.filter.mediaTypes.map(type => {
-          switch (type) {
-            case 'photo': return MediaType.Photo;
-            case 'video': return MediaType.Video;
-            case 'gif': return MediaType.Gif;
-            default: return MediaType.Photo;
-          }
-        });
-
-        createCreationTask(user, {
-          mediaTypes,
-          source: list.filter.source,
-        });
-
-        setProgress(prev => {
-          if (!prev) return null;
-          const ts = new Date().toLocaleTimeString();
-          return {
-            ...prev,
-            completedAccounts: [...prev.completedAccounts, list.accounts[i]],
-            successCount: prev.successCount + 1,
-            logs: [...prev.logs, `[${ts}] ✅ @${list.accounts[i]} 任务已创建`],
-          };
-        });
-
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      } catch (err: any) {
-        setProgress(prev => {
-          if (!prev) return null;
-          const ts = new Date().toLocaleTimeString();
-          return {
-            ...prev,
-            failedAccounts: [...prev.failedAccounts, list.accounts[i]],
-            failCount: prev.failCount + 1,
-            logs: [...prev.logs, `[${ts}] ❌ @${list.accounts[i]} 失败: ${err.message}`],
-          };
-        });
-
-        notification.warning({
-          message: `账户 ${list.accounts[i]} 下载失败`,
-          description: err.message,
-        });
-
-        tauriNotification.sendNotification({
-          title: '批量下载提醒',
-          body: `@${list.accounts[i]} 下载失败: ${err.message}`,
-        });
-      }
-    }
-
-    setProgress(prev => {
-      if (!prev) return null;
-      const ts = new Date().toLocaleTimeString();
-      return {
-        ...prev,
-        isRunning: false,
-        isPaused: false,
-        logs: [...prev.logs, `[${ts}] 批量下载完成！`],
-      };
-    });
-  }, [createCreationTask]);
+    },
+    [createCreationTask],
+  );
 
   const pauseBatchDownload = useCallback(() => {
-    setProgress(prev => {
+    setProgress((prev) => {
       if (!prev || prev.isPaused) return prev;
       const ts = new Date().toLocaleTimeString();
       return {
@@ -149,7 +174,7 @@ export function useBatchDownload() {
   }, []);
 
   const resumeBatchDownload = useCallback(() => {
-    setProgress(prev => {
+    setProgress((prev) => {
       if (!prev || !prev.isPaused) return prev;
       const ts = new Date().toLocaleTimeString();
       return {
@@ -165,7 +190,7 @@ export function useBatchDownload() {
     for (const task of creationTasks) {
       removeCreationTask(task.id);
     }
-    setProgress(prev => {
+    setProgress((prev) => {
       if (!prev) return null;
       const ts = new Date().toLocaleTimeString();
       return {
@@ -178,7 +203,7 @@ export function useBatchDownload() {
   }, []);
 
   const clearLogs = useCallback(() => {
-    setProgress(prev => {
+    setProgress((prev) => {
       if (!prev) return null;
       return { ...prev, logs: [] };
     });
