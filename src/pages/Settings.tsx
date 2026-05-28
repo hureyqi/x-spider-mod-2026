@@ -9,6 +9,7 @@ import { SavePathSelector } from '../components/settings/SavePathSelector';
 import { Button, Input, Switch } from 'antd';
 import { FileNameTemplateInput } from '../components/settings/FileNameTemplateInput';
 import { FolderModeSelector } from '../components/settings/FolderModeSelector';
+import { ThemeModeSelector } from '../components/settings/ThemeModeSelector';
 import { useSettings } from '../hooks/useSettings';
 import { showInFolder } from '../utils/shell';
 import { path } from '@tauri-apps/api';
@@ -128,6 +129,13 @@ export const Settings: React.FC = () => {
         </Item>
       </Section>
       <Section title="应用" name="app">
+        <Item
+          label="主题模式"
+          settingKey="themeMode"
+          description="选择应用的主题外观，跟随系统将根据操作系统设置自动切换"
+        >
+          <ThemeModeSelector />
+        </Item>
         <Item
           label="自动检查更新"
           settingKey="autoCheckUpdate"

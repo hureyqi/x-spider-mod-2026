@@ -3,9 +3,9 @@ import { CloseCircleFilled, LoadingOutlined } from '@ant-design/icons';
 import { useMount } from 'ahooks';
 import { ConfigProvider, App as AntApp } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { SideBar } from './components/SideBar';
-import { ANTD_THEME } from './constants/antd-theme';
+import { ANTD_THEME_DARK, ANTD_THEME_LIGHT } from './constants/themes';
 import { useBootstrap } from './hooks/useBootstrap';
 import { useRunBackgroundTasks } from './hooks/useRunBackgroundTasks';
 import { useAppStateStore } from './stores/app-state';
@@ -42,10 +42,51 @@ const AppInternal: React.FC = () => {
 
 export const App: React.FC = () => {
   const { ready, error } = useBootstrap();
+  const [themeConfig, setThemeConfig] = useState(ANTD_THEME_LIGHT);
+
+  useEffect(() => {
+    const settings = useSettingsStore.getState();
+    const themeMode = settings.app.themeMode;
+
+    if (themeMode === 'dark') {
+      setThemeConfig(ANTD_THEME_DARK);
+    } else if (themeMode === 'light') {
+      setThemeConfig(ANTD_THEME_LIGHT);
+    } else {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const handleSystemThemeChange = (e: MediaQueryListEvent) => {
+        setThemeConfig(e.matches ? ANTD_THEME_DARK : ANTD_THEME_LIGHT);
+      };
+
+      setThemeConfig(mediaQuery.matches ? ANTD_THEME_DARK : ANTD_THEME_LIGHT);
+      mediaQuery.addEventListener('change', handleSystemThemeChange);
+
+      return () => {
+        mediaQuery.removeEventListener('change', handleSystemThemeChange);
+      };
+    }
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = useSettingsStore.subscribe((state) => {
+      const themeMode = state.app.themeMode;
+
+      if (themeMode === 'dark') {
+        setThemeConfig(ANTD_THEME_DARK);
+      } else if (themeMode === 'light') {
+        setThemeConfig(ANTD_THEME_LIGHT);
+      } else {
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        setThemeConfig(mediaQuery.matches ? ANTD_THEME_DARK : ANTD_THEME_LIGHT);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   return (
     <ConfigProvider
-      theme={ANTD_THEME}
+      theme={themeConfig}
       autoInsertSpaceInButton={false}
       locale={zhCN}
     >

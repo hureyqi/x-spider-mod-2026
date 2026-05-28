@@ -18,7 +18,8 @@ export const DEFAULT_SETTINGS: Settings = {
     autoCheckUpdate: true,
     acceptPrerelease: false,
     writeLogs: false,
+    themeMode: 'auto',
   },
 };
 
-export const CURRENT_SETTINGS_VERSION = 3;
+export const CURRENT_SETTINGS_VERSION = 4;

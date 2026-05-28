@@ -58,6 +58,12 @@ export const useSettingsStore = create(
           }
         }
 
+        if (version <= 3) {
+          if (!state.app.themeMode) {
+            state.app.themeMode = 'auto';
+          }
+        }
+
         return state;
       },
     },
