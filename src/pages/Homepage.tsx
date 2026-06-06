@@ -7,6 +7,7 @@ import { DownloadController } from '../components/homepage/DownloadController';
 import { useAppStateStore } from '../stores/app-state';
 import { useHomepageStore } from '../stores/homepage';
 import { buildUserUrl } from '../twitter/url';
+import { useTheme } from '../App';
 
 export const Homepage: React.FC = () => {
   const { message } = App.useApp();
@@ -25,6 +26,7 @@ export const Homepage: React.FC = () => {
       clearSearchHistory: s.clearSearchHistory,
       cookieString: s.cookieString,
     }));
+  const { isDark } = useTheme();
   const searchAbortControllerRef = useRef<AbortController>();
 
   const startSearch = async (sn: string) => {
@@ -128,7 +130,13 @@ export const Homepage: React.FC = () => {
               <DownloadController />
               <section
                 aria-label="用户信息"
-                className="bg-white border-[1px] border-gray-300 rounded-md mt-4"
+                className="rounded-xl mt-4"
+                style={{
+                  backgroundColor: isDark ? '#1c1c1e' : '#ffffff',
+                  border: isDark
+                    ? '1px solid rgba(255,255,255,0.08)'
+                    : '1px solid rgba(0,0,0,0.06)',
+                }}
               >
                 <span className="sr-only" role="status">
                   用户信息加载完成，当前搜索用户：
@@ -149,14 +157,17 @@ export const Homepage: React.FC = () => {
                     <Avatar src={userInfo.data.avatar} size={50} alt="头像" />
                   </div>
                   <div className="ml-2">
-                    <p>
+                    <p style={{ color: isDark ? '#f5f5f7' : '#1d1d1f' }}>
                       {userInfo.data.name || '未知用户'}
-                      <span className="text-gray-400">
+                      <span style={{ color: isDark ? '#6e6e73' : '#aeaeb2' }}>
                         （共 {userInfo.data.mediaCount || 0} 个媒体）
                       </span>
                     </p>
                     {userInfo.data.screenName ? (
-                      <p className="text-ant-color-text-secondary text-sm mt-1">
+                      <p
+                        className="text-sm mt-1"
+                        style={{ color: 'var(--ant-color-text-secondary)' }}
+                      >
                         @{userInfo.data.screenName}
                       </p>
                     ) : undefined}

@@ -2,6 +2,7 @@ import { useDebounceFn } from 'ahooks';
 import { useEffect, useState } from 'react';
 import { useSettings } from '../../hooks/useSettings';
 import { useSectionContext } from './Section';
+import { useTheme } from '../../App';
 import * as R from 'ramda';
 import FormItem from 'antd/es/form/FormItem';
 import { Tooltip } from 'antd';
@@ -32,6 +33,7 @@ export const Item: React.FC<ItemProps> = ({
   const { value, setValue } = useSettings(context.name, settingKey);
   const [internalValue, setInternalValue] = useState(value);
   const [errorMessage, setErrorMessage] = useState('');
+  const { isDark } = useTheme();
   const uniqueId = `settings-${context.name}-${settingKey}`;
   const labelId = `label-${uniqueId}`;
   const descriptionId = `description-${uniqueId}`;
@@ -56,13 +58,14 @@ export const Item: React.FC<ItemProps> = ({
   }, [value]);
 
   return (
-    <section className="mb-4" aria-labelledby={labelId} tabIndex={0}>
-      <div className="mb-2 flex items-center">
+    <section className="mb-5" aria-labelledby={labelId} tabIndex={0}>
+      <div className="mb-3 flex items-center">
         <label
           id={labelId}
-          className="text-sm font-bold"
+          className="text-sm font-medium"
           htmlFor={uniqueId}
           title={label}
+          style={{ color: isDark ? '#f5f5f7' : '#1d1d1f' }}
         >
           {label}
         </label>
@@ -70,7 +73,8 @@ export const Item: React.FC<ItemProps> = ({
           <>
             <Tooltip title={description}>
               <QuestionCircleOutlined
-                className="ml-1 text-ant-color-primary"
+                className="ml-1"
+                style={{ color: 'var(--ant-color-primary)' }}
                 aria-hidden
               />
             </Tooltip>
@@ -93,7 +97,10 @@ export const Item: React.FC<ItemProps> = ({
           {...{ [valuePropName]: internalValue, ...children.props }}
         />
         {errorMessage && (
-          <div className="text-sm text-ant-color-error mt-1">
+          <div
+            className="text-sm mt-1"
+            style={{ color: 'var(--ant-color-error)' }}
+          >
             {errorMessage}
           </div>
         )}

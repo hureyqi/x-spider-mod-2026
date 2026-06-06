@@ -1,5 +1,22 @@
-import { Button, Card, Modal, Space, Table, Tag, Typography, Empty, Popconfirm } from 'antd';
-import { PlusOutlined, DeleteOutlined, EditOutlined, CopyOutlined, DownloadOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import {
+  Button,
+  Card,
+  Modal,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  Empty,
+  Popconfirm,
+} from 'antd';
+import {
+  PlusOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  CopyOutlined,
+  DownloadOutlined,
+  ClockCircleOutlined,
+} from '@ant-design/icons';
 import React, { useState } from 'react';
 import { useBatchListStore } from '../../stores/batch-list';
 import { BatchList } from '../../interfaces/BatchList';
@@ -7,6 +24,7 @@ import { BatchListEditor } from './BatchListEditor';
 import { BatchListProgress } from './BatchListProgress';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
+import { useSettingsStore } from '../../stores/settings';
 
 dayjs.extend(relativeTime);
 
@@ -23,6 +41,20 @@ export const BatchListManager: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingList, setEditingList] = useState<BatchList | null>(null);
   const [selectedList, setSelectedList] = useState<BatchList | null>(null);
+  const themeMode = useSettingsStore((state) => state.app.themeMode);
+  const [systemDark, setSystemDark] = React.useState(
+    () => window.matchMedia('(prefers-color-scheme: dark)').matches,
+  );
+
+  React.useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    setSystemDark(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setSystemDark(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  const isDark = themeMode === 'dark' || (themeMode === 'auto' && systemDark);
 
   const handleCreate = () => {
     setEditingList(null);
@@ -57,9 +89,13 @@ export const BatchListManager: React.FC = () => {
       key: 'name',
       render: (name: string, record: BatchList) => (
         <Space direction="vertical" size={0}>
-          <Text strong>{name}</Text>
+          <Text strong style={{ color: isDark ? '#f5f5f7' : '#1d1d1f' }}>
+            {name}
+          </Text>
           {record.description && (
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <Text
+              style={{ fontSize: 12, color: isDark ? '#98989d' : '#86868b' }}
+            >
               {record.description}
             </Text>
           )}
@@ -75,7 +111,9 @@ export const BatchListManager: React.FC = () => {
         <Space>
           <Tag color="blue">{accounts.length}</Tag>
           {record.lastUsedAt && (
-            <ClockCircleOutlined style={{ color: '#999' }} />
+            <ClockCircleOutlined
+              style={{ color: isDark ? '#6e6e73' : '#999' }}
+            />
           )}
         </Space>
       ),
@@ -88,10 +126,16 @@ export const BatchListManager: React.FC = () => {
       render: (filter: BatchList['filter']) => (
         <Space>
           {filter.mediaTypes.map((type) => (
-            <Tag key={type} color={
-              type === 'photo' ? 'green' : 
-              type === 'video' ? 'purple' : 'orange'
-            }>
+            <Tag
+              key={type}
+              color={
+                type === 'photo'
+                  ? 'green'
+                  : type === 'video'
+                    ? 'purple'
+                    : 'orange'
+              }
+            >
               {type === 'photo' ? '图片' : type === 'video' ? '视频' : 'GIF'}
             </Tag>
           ))}
@@ -114,7 +158,11 @@ export const BatchListManager: React.FC = () => {
       dataIndex: 'createdAt',
       key: 'createdAt',
       width: 150,
-      render: (time: number) => dayjs(time).format('YYYY-MM-DD HH:mm'),
+      render: (time: number) => (
+        <span style={{ color: isDark ? '#98989d' : '#86868b' }}>
+          {dayjs(time).format('YYYY-MM-DD HH:mm')}
+        </span>
+      ),
     },
     {
       title: '操作',
@@ -154,33 +202,57 @@ export const BatchListManager: React.FC = () => {
   ];
 
   return (
-    <div className="p-6">
+    <div
+      className="p-6"
+      style={{ backgroundColor: isDark ? '#0a0a0a' : 'transparent' }}
+    >
       <div className="mb-6">
         <div className="flex justify-between items-center mb-4">
-          <Title level={4} className="!mb-0">批量列表管理</Title>
+          <Title
+            level={4}
+            className="!mb-0"
+            style={{ color: isDark ? '#f5f5f7' : '#1d1d1f' }}
+          >
+            批量列表管理
+          </Title>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
             创建新列表
           </Button>
         </div>
-        <Text type="secondary">
+        <Text style={{ color: isDark ? '#98989d' : '#86868b' }}>
           管理您的批量下载列表，支持账户的增删改查，以及一键批量下载功能。
         </Text>
       </div>
 
       {batchLists.length === 0 ? (
-        <Card>
+        <Card
+          style={{
+            backgroundColor: isDark ? '#1c1c1e' : '#ffffff',
+            borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#e5e5e7',
+          }}
+        >
           <Empty
             description="暂无批量列表"
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           >
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleCreate}
+            >
               创建第一个列表
             </Button>
           </Empty>
         </Card>
       ) : (
         <>
-          <Card className="mb-4">
+          <Card
+            className="mb-4"
+            style={{
+              backgroundColor: isDark ? '#1c1c1e' : '#ffffff',
+              borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#e5e5e7',
+            }}
+          >
             <Table
               columns={columns}
               dataSource={batchLists}

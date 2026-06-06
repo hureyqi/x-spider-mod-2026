@@ -9,6 +9,7 @@ import FormItem from 'antd/es/form/FormItem';
 import { useForm } from 'antd/es/form/Form';
 import { parseCookie, stringifyCookie } from '../utils/cookie';
 import clsx from 'clsx';
+import { useTheme } from '../App';
 
 export const Account: React.FC = () => {
   const [cookieString, setCookieString] = useAppStateStore((state) => [
@@ -23,6 +24,7 @@ export const Account: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [form] = useForm();
   const { message } = App.useApp();
+  const { isDark } = useTheme();
 
   useEffect(() => {
     (async () => {
@@ -71,7 +73,12 @@ export const Account: React.FC = () => {
       <div className="px-4">
         <section
           aria-label="个人信息"
-          className="flex flex-col justify-center items-center border-b-[1px] py-6 border-[rgba(255,255,255,0.5)]"
+          className="flex flex-col justify-center items-center py-6"
+          style={{
+            borderBottom: isDark
+              ? '1px solid rgba(255,255,255,0.08)'
+              : '1px solid rgba(0,0,0,0.06)',
+          }}
         >
           {!accountInfo && (
             <>
@@ -105,7 +112,10 @@ export const Account: React.FC = () => {
               >
                 <Avatar size={50} src={accountInfo.avatar} alt="头像" />
               </a>
-              <div className="text-white mt-1 font-bold">
+              <div
+                className="mt-1 font-bold text-sm"
+                style={{ color: isDark ? '#f5f5f7' : '#1d1d1f' }}
+              >
                 {accountInfo.screenName}
               </div>
               <div>
@@ -113,7 +123,8 @@ export const Account: React.FC = () => {
                   onClick={() => {
                     setCookieString('');
                   }}
-                  className="text-white bg-transparent hover:text-gray-200 transition-colors text-sm"
+                  className="bg-transparent hover:opacity-70 transition-opacity text-sm flex items-center"
+                  style={{ color: isDark ? '#98989d' : '#86868b' }}
                 >
                   <LogoutOutlined aria-hidden />
                   <span className="ml-1">登出</span>
