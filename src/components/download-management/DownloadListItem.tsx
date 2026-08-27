@@ -17,6 +17,7 @@ import { buildPostUrl, buildUserUrl } from '../../twitter/url';
 import { showInFolder } from '../../utils/shell';
 import { StatusText } from './StatusText';
 import { TaskAction, TaskActions } from './TaskActions';
+import { useTheme } from '../../App';
 
 export interface DownloadListItemProps {
   task: DownloadTask;
@@ -29,6 +30,7 @@ export const DownloadListItem: React.FC<DownloadListItemProps> = ({
   itemClientHeight,
 }) => {
   const { message } = App.useApp();
+  const { isDark } = useTheme();
   const {
     removeDownloadTask,
     pauseDownloadTask,
@@ -131,7 +133,11 @@ export const DownloadListItem: React.FC<DownloadListItemProps> = ({
   return (
     <div
       role="listitem"
-      className="bg-white border-[1px] border-gray-300 rounded-md flex overflow-hidden"
+      className="border rounded-md flex overflow-hidden"
+      style={{
+        backgroundColor: isDark ? '#25262B' : '#ffffff',
+        borderColor: isDark ? '#38383a' : '#d1d1d6',
+      }}
     >
       <a
         href={
@@ -158,6 +164,7 @@ export const DownloadListItem: React.FC<DownloadListItemProps> = ({
         <p
           title={t.fileName}
           className="text-ellipsis overflow-hidden whitespace-nowrap font-bold mt-2"
+          style={{ color: isDark ? '#FFFFFF' : '#1d1d1f' }}
         >
           {t.fileName}
         </p>
@@ -170,7 +177,11 @@ export const DownloadListItem: React.FC<DownloadListItemProps> = ({
           title={`跳转到 ${t.post.user?.name || t.post.user?.screenName || '未知用户'} 的主页`}
           target="_blank"
           rel="noreferrer"
-          className="text-xs flex items-center space-x-1 w-fit text-ant-color-text-secondary bg-gray-100 p-1 rounded-full pr-2 overflow-hidden"
+          className="text-xs flex items-center space-x-1 w-fit p-1 rounded-full pr-2 overflow-hidden"
+          style={{
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#f0f2f5',
+            color: isDark ? '#A0A0A0' : '#86868b',
+          }}
         >
           <Avatar src={t.post.user?.avatar} size={20} />
           <span>{t.post.user?.name || '未知用户'}</span>
@@ -199,6 +210,8 @@ export const DownloadListItem: React.FC<DownloadListItemProps> = ({
           <Progress
             percent={Math.round((t.completeSize / t.totalSize) * 100)}
             className="mb-0 mr-0"
+            strokeColor={isDark ? '#4da3f7' : '#1d9bf0'}
+            trailColor={isDark ? 'rgba(255,255,255,0.14)' : undefined}
           />
         </div>
         <div>

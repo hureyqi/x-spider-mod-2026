@@ -2,12 +2,12 @@
   "build": {
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build",
-    "devPath": "http://localhost:1420",
+    "devPath": "http://localhost:5173",
     "distDir": "../dist"
   },
   "package": {
     "productName": "X-Spider-二黑修改版",
-    "version": "26.0.5"
+    "version": "26.0.8"
   },
   "tauri": {
     "allowlist": {

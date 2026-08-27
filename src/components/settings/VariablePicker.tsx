@@ -3,14 +3,21 @@ import React from 'react';
 import { clipboard } from '@tauri-apps/api';
 import { Button, Tooltip, App } from 'antd';
 import { REPLACER_MAP } from '../../constants/file-name-template';
+import { useTheme } from '../../App';
 
 export const VariablePicker: React.FC = () => {
   const { message } = App.useApp();
+  const { isDark } = useTheme();
   return (
     <section
       id="file-name-template-input-variables"
       aria-label="可用变量"
-      className="text-xs bg-gray-100 rounded-sm p-3 text-gray-800 mb-3"
+      className="text-xs rounded-lg p-3 mb-3"
+      style={{
+        backgroundColor: isDark ? '#1c1c1e' : '#f5f5f7',
+        color: isDark ? '#e8e8ea' : '#1d1d1f',
+        border: isDark ? '1px solid #38383a' : '1px solid rgba(0,0,0,0.08)',
+      }}
     >
       <details>
         <summary>

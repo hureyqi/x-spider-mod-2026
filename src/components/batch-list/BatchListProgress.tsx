@@ -21,7 +21,7 @@ import {
   ThunderboltOutlined,
 } from '@ant-design/icons';
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { useBatchListStore } from '../../stores/batch-list';
+import { useBatchListStore, batchRunControl } from '../../stores/batch-list';
 import { BatchList } from '../../interfaces/BatchList';
 import { useDownloadStore } from '../../stores/download';
 import { getUser } from '../../twitter/api';
@@ -58,8 +58,6 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
       : null,
   );
 
-  const isRunningRef = useRef(false);
-  const isPausedRef = useRef(false);
   const logsRef = useRef<string[]>([]);
 
   useEffect(() => {
@@ -105,8 +103,8 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
       ? ([dateRange[0].unix(), dateRange[1].unix()] as [number, number])
       : list.filter.dateRange;
 
-    isRunningRef.current = true;
-    isPausedRef.current = false;
+    batchRunControl.isRunning = true;
+    batchRunControl.isPaused = false;
     logsRef.current = [
       `[${dayjs().format('HH:mm:ss')}] 开始批量下载，共 ${list.accounts.length} 个账户`,
     ];
@@ -127,17 +125,17 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
     });
 
     for (let i = 0; i < list.accounts.length; i++) {
-      if (!isRunningRef.current) {
+      if (!batchRunControl.isRunning) {
         logsRef.current.push(`[${dayjs().format('HH:mm:ss')}] 下载已停止`);
         updateBatchDownloadProgress({ logs: [...logsRef.current] });
         break;
       }
 
-      while (isPausedRef.current && isRunningRef.current) {
+      while (batchRunControl.isPaused && batchRunControl.isRunning) {
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
 
-      if (!isRunningRef.current) {
+      if (!batchRunControl.isRunning) {
         logsRef.current.push(`[${dayjs().format('HH:mm:ss')}] 下载已停止`);
         updateBatchDownloadProgress({ logs: [...logsRef.current] });
         break;
@@ -220,7 +218,7 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
       }
     }
 
-    isRunningRef.current = false;
+    batchRunControl.isRunning = false;
     const done = [
       ...logsRef.current,
       `[${dayjs().format('HH:mm:ss')}] 批量下载完成！`,
@@ -241,8 +239,8 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
   ]);
 
   const handlePause = useCallback(() => {
-    if (isRunningRef.current && !isPausedRef.current) {
-      isPausedRef.current = true;
+    if (batchRunControl.isRunning && !batchRunControl.isPaused) {
+      batchRunControl.isPaused = true;
       logsRef.current.push(`[${dayjs().format('HH:mm:ss')}] 暂停下载`);
       updateBatchDownloadProgress({
         isPaused: true,
@@ -252,8 +250,8 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
   }, [updateBatchDownloadProgress]);
 
   const handleResume = useCallback(() => {
-    if (isRunningRef.current && isPausedRef.current) {
-      isPausedRef.current = false;
+    if (batchRunControl.isRunning && batchRunControl.isPaused) {
+      batchRunControl.isPaused = false;
       logsRef.current.push(`[${dayjs().format('HH:mm:ss')}] 继续下载`);
       updateBatchDownloadProgress({
         isPaused: false,
@@ -263,9 +261,9 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
   }, [updateBatchDownloadProgress]);
 
   const handleStop = useCallback(() => {
-    if (isRunningRef.current) {
-      isRunningRef.current = false;
-      isPausedRef.current = false;
+    if (batchRunControl.isRunning) {
+      batchRunControl.isRunning = false;
+      batchRunControl.isPaused = false;
       const { creationTasks, removeCreationTask } = useDownloadStore.getState();
       for (const task of creationTasks) {
         removeCreationTask(task.id);
@@ -280,8 +278,8 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
   }, [updateBatchDownloadProgress]);
 
   const handleReset = useCallback(() => {
-    isRunningRef.current = false;
-    isPausedRef.current = false;
+    batchRunControl.isRunning = false;
+    batchRunControl.isPaused = false;
     logsRef.current = [];
     setBatchDownloadProgress(null);
   }, [setBatchDownloadProgress]);
@@ -301,7 +299,12 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
       message: '删除成功',
       description: `已移除 ${failedAccounts.length} 个失败账户`,
     });
-  }, [list.id, failedAccounts, removeAccountsFromList, updateBatchDownloadProgress]);
+  }, [
+    list.id,
+    failedAccounts,
+    removeAccountsFromList,
+    updateBatchDownloadProgress,
+  ]);
 
   return (
     <div
@@ -794,10 +797,16 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
                     marginBottom: 8,
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div
+                    style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                  >
                     <CloseCircleOutlined style={{ color: '#ef4444' }} />
                     <Text
-                      style={{ color: '#ef4444', fontSize: 12, fontWeight: 600 }}
+                      style={{
+                        color: '#ef4444',
+                        fontSize: 12,
+                        fontWeight: 600,
+                      }}
                     >
                       失败 ({failedAccounts.length})
                     </Text>

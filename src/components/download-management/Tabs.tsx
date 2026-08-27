@@ -5,6 +5,7 @@ import clsx from 'clsx';
 import { AriaStatus } from '../../utils/aria2';
 import * as R from 'ramda';
 import { DownloadTask } from '../../interfaces/DownloadTask';
+import { useTheme } from '../../App';
 
 export interface Tab {
   name: string;
@@ -17,6 +18,7 @@ export interface TabsProps {
 }
 
 export const Tabs: React.FC<TabsProps> = ({ tabs }) => {
+  const { isDark } = useTheme();
   const { currentTab, setCurrentTab, downloadTasks } = useDownloadStore(
     (s) => ({
       currentTab: s.currentTab,
@@ -48,9 +50,17 @@ export const Tabs: React.FC<TabsProps> = ({ tabs }) => {
                 aria-selected={tab.name === currentTab}
                 role="tab"
                 onClick={() => setCurrentTab(tab.name)}
+                style={{
+                  color:
+                    tab.name === currentTab
+                      ? isDark
+                        ? '#FFFFFF'
+                        : '#1d1d1f'
+                      : undefined,
+                }}
                 className={clsx(
                   'bg-transparent text-xl relative transition-colors hover:text-ant-color-primary',
-                  tab.name === currentTab && 'font-bold !text-black',
+                  tab.name === currentTab && 'font-bold',
                 )}
               >
                 {tab.name}

@@ -16,12 +16,14 @@ import { useRunBackgroundTasks } from './hooks/useRunBackgroundTasks';
 import { useAppStateStore } from './stores/app-state';
 import { useRouteStore } from './stores/route';
 import { useSettingsStore } from './stores/settings';
+import { useAccountModalStore } from './stores/account-modal';
+import { AddAccountModal } from './components/AddAccountModal';
 
 const sharedToken = {
   colorPrimary: '#1d9bf0',
   borderRadius: 10,
   fontFamily:
-    '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif',
 };
 
 const lightToken = {
@@ -69,6 +71,13 @@ const ThemeContext = createContext<ThemeContextType>({
 });
 
 export const useTheme = () => useContext(ThemeContext);
+
+/** 全局唯一「添加 Cookie / 账户」弹窗（受共享 store 控制） */
+const GlobalAddAccountModal: React.FC = () => {
+  const open = useAccountModalStore((s) => s.addModalOpen);
+  const close = useAccountModalStore((s) => s.closeAddCookieModal);
+  return <AddAccountModal open={open} onClose={close} />;
+};
 
 const AppInternal: React.FC = () => {
   const currentRoute = useRouteStore((state) => state.route);
@@ -161,7 +170,7 @@ export const App: React.FC = () => {
               backgroundColor: 'var(--ant-color-bg-layout)',
               color: 'var(--ant-color-text)',
               fontFamily:
-                '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+                '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif',
             }}
           >
             {!ready && (
@@ -206,6 +215,7 @@ export const App: React.FC = () => {
               </div>
             )}
             {ready && <AppInternal />}
+            <GlobalAddAccountModal />
           </div>
         </AntApp>
       </ConfigProvider>

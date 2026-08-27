@@ -77,7 +77,7 @@ export const Homepage: React.FC = () => {
                 onClick={() => startSearch(keyword)}
                 type="primary"
               >
-                加载
+                抓取
               </Button>
               {userInfo.loading && (
                 <span className="sr-only" role="status">
@@ -88,10 +88,16 @@ export const Homepage: React.FC = () => {
             {searchHistory.length > 0 && (
               <section
                 aria-label="搜索历史"
-                className="text-sm mt-2"
+                className="flex flex-wrap items-center gap-2 mt-3 text-sm"
                 tabIndex={0}
               >
-                <span>
+                <span
+                  className="inline-flex items-center"
+                  style={{
+                    color: isDark ? '#98989d' : '#86868b',
+                    marginRight: 2,
+                  }}
+                >
                   搜索历史（
                   <Button
                     type="link"
@@ -104,21 +110,28 @@ export const Homepage: React.FC = () => {
                   </Button>
                   ） ：
                 </span>
-                <ul className="inline">
+                <ul className="flex flex-wrap items-center gap-2">
                   {searchHistory.map((sn) => (
-                    <li key={sn} className="inline">
-                      <Button
+                    <li key={sn}>
+                      <button
                         disabled={userInfo.loading}
-                        type="link"
-                        size="small"
                         onClick={() => {
                           setKeyword(sn);
                           startSearch(sn);
                         }}
+                        className="px-3 py-1 text-sm font-medium transition-colors duration-150 hover:brightness-125 disabled:cursor-default"
+                        style={{
+                          backgroundColor: isDark ? '#2A2D35' : '#f0f2f5',
+                          color: isDark ? '#f5f5f7' : '#1d1d1f',
+                          borderRadius: 12,
+                          border: isDark
+                            ? '1px solid rgba(255,255,255,0.08)'
+                            : '1px solid rgba(0,0,0,0.08)',
+                        }}
                       >
                         <span className="sr-only">搜索</span>
                         {sn}
-                      </Button>
+                      </button>
                     </li>
                   ))}
                 </ul>

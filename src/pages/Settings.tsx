@@ -3,9 +3,14 @@ import React from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { Section } from '../components/settings/Section';
 import { Item } from '../components/settings/Item';
-import { DownloadOutlined, GlobalOutlined } from '@ant-design/icons';
+import {
+  DownloadOutlined,
+  GlobalOutlined,
+  TeamOutlined,
+} from '@ant-design/icons';
 import Joi from 'joi';
 import { SavePathSelector } from '../components/settings/SavePathSelector';
+import { AccountPoolManager } from '../components/settings/AccountPoolManager';
 import { Button, Input, Switch } from 'antd';
 import { FileNameTemplateInput } from '../components/settings/FileNameTemplateInput';
 import { FolderModeSelector } from '../components/settings/FolderModeSelector';
@@ -127,6 +132,17 @@ export const Settings: React.FC = () => {
         >
           <Input placeholder="代理地址，例如：http://127.0.0.1:7890" />
         </Item>
+      </Section>
+      <Section title="账号与 Cookie 池" name="app" titleIcon={<TeamOutlined />}>
+        <Item
+          label="开启多 Cookie 轮换"
+          settingKey="enableCookieRotation"
+          valuePropName="checked"
+          description="开启后，遇到 429 / 401 等限流错误时自动切换到下一条有效 Cookie，提升抓取稳定性"
+        >
+          <Switch />
+        </Item>
+        <AccountPoolManager />
       </Section>
       <Section title="应用" name="app">
         <Item

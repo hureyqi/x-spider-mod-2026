@@ -19,11 +19,20 @@ export interface BatchDownloadProgress {
   dateRange?: [number, number];
 }
 
+/** 共享运行态：批量下载循环与侧边栏小工具共用，实现暂停/恢复/停止协同 */
+export const batchRunControl = {
+  isRunning: false,
+  isPaused: false,
+};
+
 export interface BatchListStore {
   batchLists: BatchList[];
   currentBatchListId: string | null;
   batchDownloadTask: BatchDownloadTask | null;
   batchDownloadProgress: BatchDownloadProgress | null;
+
+  controlBatchRun: (opts: { running?: boolean; paused?: boolean }) => void;
+  getBatchRunControl: () => { isRunning: boolean; isPaused: boolean };
 
   createBatchList: (name: string, description?: string) => BatchList;
   updateBatchList: (id: string, updates: Partial<BatchList>) => void;
@@ -68,6 +77,13 @@ export const useBatchListStore = create<BatchListStore>()(
       currentBatchListId: null,
       batchDownloadTask: null,
       batchDownloadProgress: null,
+
+      controlBatchRun: (opts) => {
+        if (opts.running !== undefined)
+          batchRunControl.isRunning = opts.running;
+        if (opts.paused !== undefined) batchRunControl.isPaused = opts.paused;
+      },
+      getBatchRunControl: () => ({ ...batchRunControl }),
 
       createBatchList: (name, description) => {
         const newList: BatchList = {

@@ -1,216 +1,149 @@
 /* eslint-disable react/prop-types */
-import { App, Avatar, Form, Input, Modal } from 'antd';
-import React, { useEffect, useState } from 'react';
-import { useAppStateStore } from '../stores/app-state';
-import { getAccountInfo } from '../twitter/api';
-import { TwitterAccountInfo } from '../interfaces/TwitterAccountInfo';
-import { LogoutOutlined, QuestionCircleOutlined } from '@ant-design/icons';
-import FormItem from 'antd/es/form/FormItem';
-import { useForm } from 'antd/es/form/Form';
-import { parseCookie, stringifyCookie } from '../utils/cookie';
-import clsx from 'clsx';
+import { App, Avatar, Dropdown, MenuProps } from 'antd';
+import {
+  PlusOutlined,
+  LogoutOutlined,
+  SettingOutlined,
+  CheckOutlined,
+} from '@ant-design/icons';
+import React from 'react';
+import { useAccountStore, useActiveAccount } from '../stores/accounts';
+import { useAccountModalStore } from '../stores/account-modal';
+import { useRouteStore } from '../stores/route';
+import { ROUTES } from '../constants/routes';
 import { useTheme } from '../App';
 
 export const Account: React.FC = () => {
-  const [cookieString, setCookieString] = useAppStateStore((state) => [
-    state.cookieString,
-    state.setCookieString,
-  ]);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalLoading, setModalLoading] = useState(false);
-  const [accountInfo, setAccountInfo] = useState<TwitterAccountInfo | null>(
-    null,
-  );
-  const [loading, setLoading] = useState(false);
-  const [form] = useForm();
+  const { accounts, activeId, setActive, removeAccount } = useAccountStore();
+  const active = useActiveAccount();
+  const setRoute = useRouteStore((s) => s.setRoute);
+  const openAddCookieModal = useAccountModalStore((s) => s.openAddCookieModal);
   const { message } = App.useApp();
   const { isDark } = useTheme();
 
-  useEffect(() => {
-    (async () => {
-      if (!cookieString) {
-        setAccountInfo(null);
-      } else {
-        setLoading(true);
-        try {
-          const accountInfo = await getAccountInfo(cookieString);
-          setAccountInfo(accountInfo);
-        } catch (err: any) {
-          message.error('获取账号信息失败，请检查 Cookie 或代理配置是否正确');
-          log.error(err);
-        } finally {
-          setLoading(false);
-        }
+  const subColor = isDark ? '#98989d' : '#86868b';
+
+  const menuItems: MenuProps['items'] = [
+    {
+      key: 'account-group',
+      type: 'group',
+      label: '已保存账户',
+      children: accounts.length
+        ? accounts.map((acc) => ({
+            key: `account:${acc.id}`,
+            label: (
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: 16,
+                }}
+              >
+                <span>{acc.alias}</span>
+                {acc.id === activeId && (
+                  <CheckOutlined
+                    style={{ color: 'var(--ant-color-primary)' }}
+                  />
+                )}
+              </div>
+            ),
+          }))
+        : [{ key: 'empty', disabled: true, label: '暂无账户' }],
+    },
+    { key: 'divider-1', type: 'divider' },
+    {
+      key: 'add',
+      icon: <PlusOutlined />,
+      label: '添加新 Cookie / 账户',
+    },
+    {
+      key: 'rotation',
+      icon: <SettingOutlined />,
+      label: 'Cookie 轮换设置',
+    },
+    { key: 'divider-2', type: 'divider' },
+    {
+      key: 'logout',
+      icon: <LogoutOutlined />,
+      label: '登出当前账号',
+      danger: true,
+    },
+  ];
+
+  const handleClick: MenuProps['onClick'] = ({ key }) => {
+    if (key.startsWith('account:')) {
+      setActive(key.slice('account:'.length));
+    } else if (key === 'add') {
+      openAddCookieModal();
+    } else if (key === 'rotation') {
+      const route = ROUTES.find((r) => r.id === 'settings');
+      if (route) setRoute(route);
+    } else if (key === 'logout') {
+      if (active) {
+        removeAccount(active.id);
+        message.success('已登出当前账号');
       }
-    })();
-  }, [cookieString]);
-
-  const onFormFinished = async (values: any) => {
-    setModalLoading(true);
-    const newCookieString = stringifyCookie(values);
-
-    try {
-      const accountInfo = await getAccountInfo(newCookieString);
-      setAccountInfo(accountInfo);
-      setModalOpen(false);
-      setCookieString(newCookieString);
-    } catch (err: any) {
-      log.error(err);
-      message.error('无法登录，请检查 Cookie 或代理配置是否正确');
-    } finally {
-      setModalLoading(false);
     }
   };
 
-  const onModalOk = async () => {
-    form.submit();
-  };
-
-  const cookies = parseCookie(cookieString);
+  const displayName = active?.alias || active?.info?.screenName || '未命名账号';
 
   return (
     <>
       <div className="px-4">
         <section
           aria-label="个人信息"
-          className="flex flex-col justify-center items-center py-6"
+          className="flex flex-col justify-center items-center py-5"
           style={{
             borderBottom: isDark
               ? '1px solid rgba(255,255,255,0.08)'
               : '1px solid rgba(0,0,0,0.06)',
           }}
         >
-          {!accountInfo && (
-            <>
+          {active ? (
+            <Dropdown
+              menu={{ items: menuItems, onClick: handleClick }}
+              trigger={['click']}
+              placement="bottom"
+            >
               <button
-                disabled={loading}
-                className={clsx(
-                  'bg-transparent',
-                  loading && 'hover:cursor-wait',
-                )}
-                onClick={() => setModalOpen(true)}
+                type="button"
+                aria-label="切换账户 / Cookie 池管理"
+                className="w-full flex flex-col items-center focus:outline-none"
               >
-                <Avatar size={50}>{loading ? '加载中' : '登录'}</Avatar>
-              </button>
-              <span className="sr-only" role="alert">
-                账号未登录
-              </span>
-            </>
-          )}
-          {accountInfo && (
-            <>
-              <span className="sr-only" role="alert">
-                账号 {accountInfo.screenName} 已登录
-              </span>
-              <a
-                className="focus:outline !outline-4 !outline-black"
-                title="前往个人主页"
-                aria-label="前往个人主页"
-                target="_blank"
-                href={`https://twitter.com/${accountInfo.screenName}`}
-                rel="noreferrer"
-              >
-                <Avatar size={50} src={accountInfo.avatar} alt="头像" />
-              </a>
-              <div
-                className="mt-1 font-bold text-sm"
-                style={{ color: isDark ? '#f5f5f7' : '#1d1d1f' }}
-              >
-                {accountInfo.screenName}
-              </div>
-              <div>
-                <button
-                  onClick={() => {
-                    setCookieString('');
-                  }}
-                  className="bg-transparent hover:opacity-70 transition-opacity text-sm flex items-center"
-                  style={{ color: isDark ? '#98989d' : '#86868b' }}
+                <Avatar size={50} src={active.info?.avatar || undefined}>
+                  {active.info?.avatar ? undefined : displayName.slice(0, 1)}
+                </Avatar>
+                <span
+                  className="mt-1 font-bold text-sm cursor-pointer"
+                  style={{ color: isDark ? '#f5f5f7' : '#1d1d1f' }}
                 >
-                  <LogoutOutlined aria-hidden />
-                  <span className="ml-1">登出</span>
-                </button>
-              </div>
-            </>
+                  {displayName}
+                </span>
+                {active.info?.screenName &&
+                  active.info.screenName !== displayName && (
+                    <span className="text-xs" style={{ color: subColor }}>
+                      @{active.info.screenName}
+                    </span>
+                  )}
+              </button>
+            </Dropdown>
+          ) : (
+            <button
+              type="button"
+              className="flex flex-col items-center cursor-pointer"
+              onClick={openAddCookieModal}
+              aria-label="添加 Cookie / 账户"
+            >
+              <Avatar size={50} icon={<PlusOutlined />} />
+              <span className="mt-1 text-sm" style={{ color: subColor }}>
+                添加 Cookie / 账户
+              </span>
+            </button>
           )}
         </section>
       </div>
-      <Modal
-        onOk={onModalOk}
-        confirmLoading={modalLoading}
-        onCancel={() => setModalOpen(false)}
-        open={modalOpen}
-        title="设置 Twitter 的 Cookie"
-      >
-        <Form
-          labelCol={{ span: 5 }}
-          form={form}
-          className="mt-4"
-          onFinish={onFormFinished}
-          initialValues={cookies}
-        >
-          <FormItem
-            name="auth_token"
-            label="auth_token"
-            rules={[
-              {
-                type: 'string',
-                required: true,
-              },
-            ]}
-          >
-            <Input placeholder="名称为 auth_token 的值" />
-          </FormItem>
-          <FormItem
-            name="ct0"
-            label="ct0"
-            rules={[
-              {
-                type: 'string',
-                required: true,
-              },
-            ]}
-          >
-            <Input placeholder="名称为 ct0 的值" />
-          </FormItem>
-        </Form>
-        <p className="mt-2">
-          <button
-            onClick={() => {
-              Modal.confirm({
-                title: '寻找 CookieString 的方法',
-                icon: null,
-                content: (
-                  <>
-                    <p>1. 打开推特并登录。</p>
-                    <p>2. 按【F12】打开开发者工具。</p>
-                    <p>3. 找到【应用程序（Applications）】选项卡。</p>
-                    <p>
-                      4.
-                      在左侧列表中找到【Cookie】，展开并选中【https://twitter.com】。
-                    </p>
-                    <p>
-                      5.
-                      在右侧找到名称为【auth_token】和【ct0】的项目，复制相应值填写表单即可。
-                    </p>
-                  </>
-                ),
-              });
-            }}
-            className="text-ant-color-link flex items-center bg-transparent"
-          >
-            <QuestionCircleOutlined
-              className="transform translate-y-[0.6px]"
-              aria-hidden
-            />
-            <span className="ml-1">寻找 CookieString 的方法</span>
-          </button>
-        </p>
-        {modalLoading && (
-          <span className="sr-only" role="status">
-            登录中，请稍候
-          </span>
-        )}
-      </Modal>
     </>
   );
 };

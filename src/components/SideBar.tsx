@@ -4,6 +4,7 @@ import { Route } from '../interfaces/Route';
 import { useRouteStore } from '../stores/route';
 import { Account } from './Account';
 import { useSettingsStore } from '../stores/settings';
+import { CurrentTaskWidget } from './CurrentTaskWidget';
 
 interface SideBarItemProps {
   route: Route;
@@ -133,13 +134,15 @@ export const SideBar: React.FC = () => {
             ))}
           </ul>
         </nav>
-        <div className="p-5">
+        <div className="p-4">
+          <CurrentTaskWidget isDark={isDark} />
           <div
             style={{
               height: 1,
               backgroundColor: isDark
                 ? 'rgba(255,255,255,0.15)'
                 : 'rgba(0,0,0,0.15)',
+              marginTop: 12,
               marginBottom: 12,
             }}
           />
@@ -147,7 +150,8 @@ export const SideBar: React.FC = () => {
             style={{
               fontSize: 11,
               textAlign: 'center',
-              color: isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)',
+              letterSpacing: 0.3,
+              color: isDark ? 'rgba(255,255,255,0.3)' : '#555555',
             }}
           >
             X-Spider v{PACKAGE_JSON_VERSION}

@@ -64,6 +64,15 @@ export const useSettingsStore = create(
           }
         }
 
+        if (version <= 4) {
+          if (!state.postProcess) {
+            state.postProcess = DEFAULT_SETTINGS.postProcess;
+          }
+          if (!state.app.enableCookieRotation) {
+            state.app.enableCookieRotation = true;
+          }
+        }
+
         return state;
       },
     },

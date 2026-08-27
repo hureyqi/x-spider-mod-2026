@@ -4970,7 +4970,7 @@ dependencies = [
 
 [[package]]
 name = "x-spider"
-version = "26.0.7"
+version = "26.0.8"
 dependencies = [
  "reqwest",
  "serde",

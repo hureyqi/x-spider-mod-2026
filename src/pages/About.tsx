@@ -105,22 +105,6 @@ export const About: React.FC = () => {
               className="flex items-center gap-2"
               style={{ color: textColor }}
             >
-              <strong className="min-w-24">原作者：</strong>
-              <a
-                href="https://github.com/MiningCattiva"
-                target="_blank"
-                rel="noreferrer"
-                style={{ color: linkColor }}
-                className="hover:underline"
-              >
-                MiningCattiva
-              </a>
-            </li>
-
-            <li
-              className="flex items-center gap-2"
-              style={{ color: textColor }}
-            >
               <strong className="min-w-24">修改者：</strong>
               <a
                 href="https://github.com/hureyqi"

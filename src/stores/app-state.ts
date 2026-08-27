@@ -6,6 +6,10 @@ export interface AppStateStore {
   cookieString: string;
   setCookieString: (cookieString: string) => void;
 
+  /** 多 Cookie 池：每条一个 Cookie 字符串 */
+  cookieStrings: string[];
+  setCookieStrings: (cookieStrings: string[]) => void;
+
   searchHistory: string[];
   addSearchHistory: (keyword: string) => void;
   clearSearchHistory: () => void;
@@ -25,7 +29,13 @@ export const useAppStateStore = create(
   persist<AppStateStore>(
     (set, get) => ({
       cookieString: '',
-      setCookieString: (cookieString) => set({ cookieString }),
+      setCookieString: (cookieString) =>
+        set({
+          cookieString,
+          cookieStrings: cookieString ? [cookieString] : [],
+        }),
+      cookieStrings: [],
+      setCookieStrings: (cookieStrings) => set({ cookieStrings }),
       searchHistory: [],
       addSearchHistory: (keyword) => {
         const history = get().searchHistory;

@@ -16,6 +16,7 @@ import { resolveVariables } from '../utils/file-name-template';
 import { FileNameTemplateData } from '../interfaces/FileNameTemplateData';
 import dayjs from 'dayjs';
 import { notification as antNotification } from 'antd';
+import { runPostProcess } from '../ipc/post-process';
 
 let _log: ICategoriedLogger;
 
@@ -81,7 +82,7 @@ async function prepareDownloadTask({
   } else {
     dir = await path.join(settings.download.saveDirBase, safeBloggerName);
   }
-  
+
   log().info('resolved dirName', safeBloggerName);
   log().info('resolved dir', dir);
 
@@ -601,6 +602,16 @@ async function scheduleAutoSyncTasks() {
   );
 
   batchUpdateDownloadTasks(newTasks);
+
+  // 下载自此轮进入 complete -> 触发后处理（Sidecar 元数据 / LLM 打标）
+  const oldStatusMap = new Map(downloadTasks.map((t) => [t.gid, t.status]));
+  for (const nt of newTasks) {
+    if (nt.status === 'complete' && oldStatusMap.get(nt.gid) !== 'complete') {
+      runPostProcess(nt).catch((err) => {
+        log().error('runPostProcess failed', err);
+      });
+    }
+  }
 
   setTimeout(scheduleAutoSyncTasks, INTERVAL);
 }

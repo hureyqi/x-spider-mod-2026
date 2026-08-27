@@ -1,6 +1,7 @@
 /* eslint-disable react/prop-types */
 import clsx from 'clsx';
 import React from 'react';
+import { useTheme } from '../../App';
 
 export interface TaskAction {
   name: string;
@@ -15,6 +16,8 @@ export interface TaskActionsProps {
 }
 
 export const TaskActions: React.FC<TaskActionsProps> = ({ actions }) => {
+  const { isDark } = useTheme();
+
   return (
     <ul className="flex space-x-3 text-sm">
       {actions.map((action) => (
@@ -23,17 +26,28 @@ export const TaskActions: React.FC<TaskActionsProps> = ({ actions }) => {
             onClick={action.onClick}
             aria-label={action.name}
             title={action.name}
+            style={{
+              color: actionColor(action.primary, action.danger, isDark),
+            }}
             className={clsx(
-              'bg-transparent transition-colors space-x-1 hover:text-gray-500',
-              action.primary && 'text-blue-500 hover:!text-blue-400',
-              action.danger && 'text-red-500 hover:!text-red-400',
+              'bg-transparent transition-all duration-150 space-x-1 hover:brightness-125',
             )}
           >
-            <span>{action.icon}</span>
+            <span className="inline-flex items-center">{action.icon}</span>
             <span>{action.name}</span>
           </button>
         </li>
       ))}
     </ul>
   );
+};
+
+const actionColor = (
+  primary: boolean | undefined,
+  danger: boolean | undefined,
+  isDark: boolean,
+): string => {
+  if (primary) return '#3b82f6';
+  if (danger) return isDark ? '#ff6b6b' : '#ef4444';
+  return isDark ? '#A0A0A0' : '#6b6b70';
 };

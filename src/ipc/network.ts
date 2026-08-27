@@ -3,12 +3,35 @@ import { Response } from '../interfaces/Response';
 import { RequestOptions } from '../interfaces/RequestOptions';
 import * as R from 'ramda';
 import { useSettingsStore } from '../stores/settings';
+import { useAppStateStore } from '../stores/app-state';
 import { delay } from '../utils';
+import { cookieManager } from '../utils/cookie-manager';
+import { parseCookie } from '../utils/cookie';
 
-const MAX_RETRY_COUNT = 16;
-const MAX_RETRY_DELAY = 16000;
+/** 指数退避延迟序列：2s、4s、8s（即重试 3 次后抛错） */
+const RETRY_DELAYS = [2000, 4000, 8000];
 
 let log: ICategoriedLogger;
+
+/** 将 app-state 中的 Cookie 池同步到 CookieManager（含单条兼容） */
+function syncCookiesFromStore() {
+  const { cookieStrings, cookieString } = useAppStateStore.getState();
+  const rotationEnabled =
+    useSettingsStore.getState().app.enableCookieRotation !== false;
+  const allPool =
+    Array.isArray(cookieStrings) && cookieStrings.length > 0
+      ? cookieStrings
+      : cookieString
+        ? [cookieString]
+        : [];
+  // 关闭自动轮换时，仅使用当前激活 Cookie 构成单账号池
+  const cookies = rotationEnabled
+    ? allPool
+    : cookieString
+      ? [cookieString]
+      : [];
+  cookieManager.setCookies(cookies);
+}
 
 export async function request(options: RequestOptions) {
   if (!log) {
@@ -22,35 +45,86 @@ export async function request(options: RequestOptions) {
     });
   }
 
-  const settings = useSettingsStore.getState();
-  let remainingRetryCount = MAX_RETRY_COUNT;
-  let retryDelay = 100;
-  let lastErr: any;
+  syncCookiesFromStore();
 
-  while (remainingRetryCount > 0) {
+  const settings = useSettingsStore.getState();
+  // 显式固定使用的 Cookie（用于验证某条 Cookie），不参与自动轮换
+  const fixedCookie = options.cookie || undefined;
+  const authCookie = options.cookie != null;
+
+  // 依据当前选中的 Cookie 组装请求头（Cookie + X-Csrf-Token）
+  const buildHeaders = (cookie?: string): Record<string, string> => {
+    const headers: Record<string, string> = { ...(options.headers || {}) };
+    if (cookie) {
+      headers.Cookie = cookie;
+      const ct0 = parseCookie(cookie).ct0;
+      if (ct0) {
+        headers['X-Csrf-Token'] = ct0;
+      }
+    } else {
+      delete headers.Cookie;
+      delete headers['X-Csrf-Token'];
+    }
+    return headers;
+  };
+
+  const method = R.defaultTo('GET', options.method);
+  const body = R.defaultTo('', options.body);
+  const proxyUrl = settings.proxy.useSystem ? '' : settings.proxy.url;
+  let lastErr: any;
+  let attempt = 0;
+  // 初始 1 次 + 重试 3 次
+  const maxAttempts = 1 + RETRY_DELAYS.length;
+
+  while (attempt < maxAttempts) {
+    // 选择本轮 Cookie：固定，或从池中轮换取号
+    const cookie = fixedCookie || cookieManager.nextCookie() || undefined;
+
     try {
-      return await requestInternal(
-        R.defaultTo('GET', options.method),
+      const res = await requestInternal(
+        method,
         url.href,
-        R.defaultTo('', options.body),
+        body,
         settings.proxy.enable,
-        settings.proxy.useSystem ? '' : settings.proxy.url,
-        R.defaultTo({}, options.headers),
+        proxyUrl,
+        buildHeaders(cookie),
         options.responseType,
+      );
+
+      // 请求成功（2xx）
+      if (res.status < 400) {
+        if (cookie && !authCookie) cookieManager.markSuccess(cookie);
+        return res;
+      }
+
+      const limited = !authCookie && (res.status === 401 || res.status === 429);
+      lastErr = new Error(`HTTP ${res.status}`);
+
+      if (limited && cookie) {
+        // 标记当前账号受限，下一次取号自动轮换到下一条
+        cookieManager.markLimited(cookie);
+        // 池内已无可用账号，继续重试无意义
+        if (!cookieManager.hasAvailable()) break;
+      }
+
+      log.warn(
+        `Request failed (HTTP ${res.status}), attempt=${attempt + 1}/${maxAttempts}, retry in ${RETRY_DELAYS[attempt] ?? 0}ms`,
+        { cookie: cookie ? '******' : undefined },
       );
     } catch (err: any) {
       lastErr = err;
       log.warn(
-        `Request failed, retry after ${retryDelay}ms, remaining retry count: ${remainingRetryCount}`,
+        `Request error, attempt=${attempt + 1}/${maxAttempts}, retry in ${RETRY_DELAYS[attempt] ?? 0}ms`,
         err,
       );
-      await delay(retryDelay);
-      remainingRetryCount--;
-      retryDelay *= 2;
-      if (retryDelay > MAX_RETRY_DELAY) {
-        retryDelay = MAX_RETRY_DELAY;
-      }
     }
+
+    // 指数退避，最后一次重试失败后不再等待，直接抛出
+    const wait = RETRY_DELAYS[attempt];
+    if (wait != null) {
+      await delay(wait);
+    }
+    attempt++;
   }
 
   log.error('Max retry count reached, last error:', lastErr);

@@ -12,14 +12,16 @@ import {
 import { TwitterPost } from '../interfaces/TwitterPost';
 import { TwitterUser } from '../interfaces/TwitterUser';
 import { request } from '../ipc/network';
-import { useAppStateStore } from '../stores/app-state';
-import { parseCookie } from '../utils/cookie';
 import MediaType from '../enums/MediaType';
 
 const HOST = 'x.com';
 
+/**
+ * 组装通用请求头。
+ * Cookie 与 X-Csrf-Token 交由网络请求层（network.ts）结合 CookieManager
+ * 统一注入，以支持多 Cookie 轮换；此处不再从 store 读取单一 Cookie。
+ */
 function getCommonHeaders(withCredentials = true): Record<string, string> {
-  const cookies = useAppStateStore.getState().cookieString;
   return {
     'User-Agent': navigator.userAgent,
     Referer: `https://${HOST}`,
@@ -27,8 +29,6 @@ function getCommonHeaders(withCredentials = true): Record<string, string> {
       ? {
           Authorization:
             'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
-          Cookie: cookies,
-          'X-Csrf-Token': parseCookie(cookies)['ct0'],
         }
       : {}),
   };
@@ -48,9 +48,8 @@ export async function getAccountInfo(
     method: 'GET',
     url: `https://${HOST}`,
     responseType: 'text',
-    headers: R.mergeRight(getCommonHeaders(false), {
-      Cookie: cookieStringOverride,
-    }),
+    headers: getCommonHeaders(false),
+    cookie: cookieStringOverride || undefined,
   });
   ensureResponse(res);
   const html = res.body as string;

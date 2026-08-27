@@ -1,4 +1,5 @@
 import { Settings } from '../interfaces/Settings';
+import { DEFAULT_POST_PROCESS } from '../interfaces/PostProcess';
 
 export const DEFAULT_SETTINGS: Settings = {
   proxy: {
@@ -19,7 +20,9 @@ export const DEFAULT_SETTINGS: Settings = {
     acceptPrerelease: false,
     writeLogs: false,
     themeMode: 'auto',
+    enableCookieRotation: true,
   },
+  postProcess: DEFAULT_POST_PROCESS,
 };
 
-export const CURRENT_SETTINGS_VERSION = 4;
+export const CURRENT_SETTINGS_VERSION = 5;
