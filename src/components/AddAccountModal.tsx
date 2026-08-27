@@ -22,8 +22,16 @@ import React, { useEffect, useState } from 'react';
 import { getAccountInfo } from '../twitter/api';
 import { useAccountStore } from '../stores/accounts';
 import { useAccountModalStore } from '../stores/account-modal';
-import { assembleCookie, parseCookieString, validateCookie } from '../utils/cookie';
-import { onAuthLoginSuccess, openAuthLoginWindow } from '../ipc/auth-login';
+import {
+  assembleCookie,
+  parseCookieString,
+  validateCookie,
+} from '../utils/cookie';
+import {
+  onAuthLoginSuccess,
+  openAuthLoginWindow,
+  fetchCurrentCookies,
+} from '../ipc/auth-login';
 import { useTheme } from '../App';
 
 export interface AddAccountModalProps {
@@ -65,6 +73,7 @@ export const AddAccountModal: React.FC<AddAccountModalProps> = ({
   const [loginState, setLoginState] = useState<
     'idle' | 'opening' | 'listening'
   >('idle');
+  const [manualFetching, setManualFetching] = useState(false);
 
   const textColor = isDark ? '#f5f5f7' : '#1d1d1f';
   const subColor = isDark ? '#98989d' : '#86868b';
@@ -89,7 +98,6 @@ export const AddAccountModal: React.FC<AddAccountModalProps> = ({
       form.resetFields();
       setQuick({ auth_token: '', ct0: '' });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editingAccount]);
 
   // 内置浏览器登录成功事件：校验 → 入库 → 刷新并关闭
@@ -113,7 +121,6 @@ export const AddAccountModal: React.FC<AddAccountModalProps> = ({
       }
     });
     return () => unlisten();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, addAccount, updateAccount, onClose]);
 
   const handleQuickChange = (key: 'auth_token' | 'ct0', value: string) => {
@@ -124,6 +131,7 @@ export const AddAccountModal: React.FC<AddAccountModalProps> = ({
 
   const openLogin = async () => {
     setLoginState('opening');
+    setManualFetching(false);
     try {
       await openAuthLoginWindow();
       setLoginState('listening');
@@ -132,6 +140,25 @@ export const AddAccountModal: React.FC<AddAccountModalProps> = ({
       log.error('Open login window failed', e);
       message.error('打开登录窗口失败，请改用「手动输入」');
       setLoginState('idle');
+    }
+  };
+
+  /** 兜底：用户已完成登录，但轮询未自动触发时，手动强制读取 Cookie */
+  const handleManualFetch = async () => {
+    if (manualFetching) return;
+    setManualFetching(true);
+    try {
+      await fetchCurrentCookies();
+      // 成功时 Rust 侧已 emit `auth-login-success`，由监听器完成入库并关闭弹窗
+    } catch (e: any) {
+      log.error('Manual fetch cookie failed', e);
+      const msg =
+        typeof e === 'string'
+          ? e
+          : e?.message || '暂未读取到 Cookie，请确认已在登录窗口完整登录后重试';
+      message.error(msg);
+    } finally {
+      setManualFetching(false);
     }
   };
 
@@ -199,11 +226,7 @@ export const AddAccountModal: React.FC<AddAccountModalProps> = ({
 
   return (
     <Modal
-      title={
-        editing
-          ? '编辑 Cookie / 账户'
-          : '添加新 Cookie / 账户'
-      }
+      title={editing ? '编辑 Cookie / 账户' : '添加新 Cookie / 账户'}
       open={open}
       onCancel={onClose}
       footer={footer}
@@ -237,7 +260,11 @@ export const AddAccountModal: React.FC<AddAccountModalProps> = ({
                   {loginState === 'idle' && (
                     <>
                       <ChromeOutlined
-                        style={{ fontSize: 34, color: '#4285F4', marginBottom: 12 }}
+                        style={{
+                          fontSize: 34,
+                          color: '#4285F4',
+                          marginBottom: 12,
+                        }}
                       />
                       <Typography.Text style={{ color: subColor }}>
                         将在内置窗口中打开 X 登录页，
@@ -260,13 +287,27 @@ export const AddAccountModal: React.FC<AddAccountModalProps> = ({
                       status="info"
                       icon={<LoadingOutlined style={{ color: '#1677ff' }} />}
                       title="等待完成登录…"
-                      subTitle="请在打开的窗口中登录 X，软件会自动提取凭据并入库。"
+                      subTitle="请在打开的窗口中登录 X，软件会自动提取凭据并入库。若长时间未自动提取，可点击下方按钮手动触发。"
+                      extra={
+                        <Button
+                          type="dashed"
+                          icon={<CheckCircleOutlined />}
+                          loading={manualFetching}
+                          onClick={handleManualFetch}
+                          style={{ marginTop: 8 }}
+                        >
+                          {manualFetching
+                            ? '正在检索 Cookie 刷盘凭据，请稍候…'
+                            : '我已完成登录，立即获取 Cookie'}
+                        </Button>
+                      }
                     />
                   )}
                 </div>
                 <Typography.Text style={{ color: subColor, fontSize: 12 }}>
-                  <SafetyCertificateOutlined /> 凭据仅保存在本机，用于账号登录验证与
-                  Cookie 轮换，不会上传到第三方。
+                  <SafetyCertificateOutlined />{' '}
+                  凭据仅保存在本机，用于账号登录验证与 Cookie
+                  轮换，不会上传到第三方。
                 </Typography.Text>
               </div>
             ),
@@ -301,7 +342,9 @@ export const AddAccountModal: React.FC<AddAccountModalProps> = ({
                 >
                   <Input.TextArea
                     rows={4}
-                    placeholder={'粘贴整段 Header Cookie，例如：\nauth_token=xxx; ct0=yyy; ...'}
+                    placeholder={
+                      '粘贴整段 Header Cookie，例如：\nauth_token=xxx; ct0=yyy; ...'
+                    }
                     className="break-all font-mono text-xs"
                     disabled={saving}
                   />
@@ -312,13 +355,11 @@ export const AddAccountModal: React.FC<AddAccountModalProps> = ({
                 >
                   或快捷填写单个字段（自动拼装为标准格式）：
                 </Typography.Paragraph>
-                <Space
-                  direction="vertical"
-                  style={{ width: '100%' }}
-                  size={8}
-                >
+                <Space direction="vertical" style={{ width: '100%' }} size={8}>
                   <Input
-                    prefix={<SecurityTokenTag label="auth_token" color="#f5222d" />}
+                    prefix={
+                      <SecurityTokenTag label="auth_token" color="#f5222d" />
+                    }
                     value={quick.auth_token}
                     onChange={(e) =>
                       handleQuickChange('auth_token', e.target.value)

@@ -10,6 +10,7 @@ fn main() {
           network::network_fetch,
           network::network_get_system_proxy_url,
           auth_capture::auth_login_open_window,
+          auth_capture::fetch_current_cookies,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

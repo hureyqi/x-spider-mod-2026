@@ -35,11 +35,14 @@ export function parseCookieString(rawString: string): Record<string, string> {
 }
 
 /** 手填快捷字段 → 拼装为标准 Cookie 字符串。 */
-export function assembleCookie(
-  fields: { alias?: string; auth_token?: string; ct0?: string },
-): string {
+export function assembleCookie(fields: {
+  alias?: string;
+  auth_token?: string;
+  ct0?: string;
+}): string {
   const parts: string[] = [];
-  if (fields.auth_token?.trim()) parts.push(`auth_token=${fields.auth_token.trim()}`);
+  if (fields.auth_token?.trim())
+    parts.push(`auth_token=${fields.auth_token.trim()}`);
   if (fields.ct0?.trim()) parts.push(`ct0=${fields.ct0.trim()}`);
   return parts.join('; ');
 }
@@ -70,9 +73,6 @@ export function validateCookie(rawString: string): {
       ok: false,
       error: '缺少必需的 ct0 字段（X-CSRF Token）',
     };
-  }
-  if ((ct0 as string).trim().length > 100) {
-    return { ok: false, error: 'ct0 字段异常过长，请检查是否为完整的 Cookie 字符串' };
   }
   // 按标准顺序重建，保证请求头稳定
   const cookie = `auth_token=${(authToken as string).trim()}; ct0=${(ct0 as string).trim()}`;

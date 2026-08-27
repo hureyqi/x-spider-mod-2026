@@ -40,3 +40,12 @@ export function onAuthLoginSuccess(
   });
   return () => unlisten?.();
 }
+
+/**
+ * 手动触发 Rust 端立即读取当前 WebView 的 Cookie 并返回。
+ * 用于用户已完成登录但轮询未自动触发的兜底场景。
+ * 成功时同时触发 `auth-login-success` 事件（Rust 侧在返回前已 emit）。
+ */
+export async function fetchCurrentCookies(): Promise<AuthLoginSuccessData> {
+  return await invoke<AuthLoginSuccessData>('fetch_current_cookies');
+}
