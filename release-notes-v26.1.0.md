@@ -10,4 +10,4 @@
 
 ## 说明
 - 便携版 `x-spider.exe` 已随本 Release 提供，下载后可直接运行（请确保 `aria2c` 就绪）。
-- 安装包：`X-Spider-二黑修改版_26.1.0_x64-setup.exe`。
+- 安装包：`X-Spider-26.1.0-x64-setup.exe`。
