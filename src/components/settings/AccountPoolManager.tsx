@@ -15,6 +15,7 @@ import {
   ThunderboltOutlined,
   CheckCircleOutlined,
   UserSwitchOutlined,
+  EditOutlined,
 } from '@ant-design/icons';
 import React, { useState } from 'react';
 import { useAccountStore } from '../../stores/accounts';
@@ -46,6 +47,7 @@ export const AccountPoolManager: React.FC = () => {
   const { message } = App.useApp();
   const { isDark } = useTheme();
   const openAddCookieModal = useAccountModalStore((s) => s.openAddCookieModal);
+  const openEditAccount = useAccountModalStore((s) => s.openEditAccount);
   const [testingId, setTestingId] = useState<string | null>(null);
 
   const textColor = isDark ? '#f5f5f7' : '#1d1d1f';
@@ -128,6 +130,15 @@ export const AccountPoolManager: React.FC = () => {
                       设为当前
                     </Button>
                   ),
+                  <Button
+                    key="edit"
+                    type="link"
+                    size="small"
+                    icon={<EditOutlined />}
+                    onClick={() => openEditAccount(acc)}
+                  >
+                    编辑
+                  </Button>,
                   <Button
                     key="test"
                     type="link"
