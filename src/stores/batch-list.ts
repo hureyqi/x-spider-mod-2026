@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { nanoid } from 'nanoid';
 import { createTauriFileStorage } from './persist/tauri-file-storage';
-import { BatchList, BatchDownloadTask } from '../interfaces/BatchList';
+import { BatchList } from '../interfaces/BatchList';
 
 export interface BatchDownloadProgress {
   listId: string;
@@ -28,7 +28,6 @@ export const batchRunControl = {
 export interface BatchListStore {
   batchLists: BatchList[];
   currentBatchListId: string | null;
-  batchDownloadTask: BatchDownloadTask | null;
   batchDownloadProgress: BatchDownloadProgress | null;
 
   controlBatchRun: (opts: { running?: boolean; paused?: boolean }) => void;
@@ -53,9 +52,6 @@ export interface BatchListStore {
   setCurrentBatchList: (listId: string | null) => void;
   getCurrentBatchList: () => BatchList | null;
 
-  setBatchDownloadTask: (task: BatchDownloadTask | null) => void;
-  updateBatchDownloadTask: (updates: Partial<BatchDownloadTask>) => void;
-
   setBatchDownloadProgress: (
     progress:
       | BatchDownloadProgress
@@ -75,7 +71,6 @@ export const useBatchListStore = create<BatchListStore>()(
     (set, get) => ({
       batchLists: [],
       currentBatchListId: null,
-      batchDownloadTask: null,
       batchDownloadProgress: null,
 
       controlBatchRun: (opts) => {
@@ -245,18 +240,6 @@ export const useBatchListStore = create<BatchListStore>()(
             (list) => list.id === state.currentBatchListId,
           ) || null
         );
-      },
-
-      setBatchDownloadTask: (task) => {
-        set({ batchDownloadTask: task });
-      },
-
-      updateBatchDownloadTask: (updates) => {
-        set((state) => ({
-          batchDownloadTask: state.batchDownloadTask
-            ? { ...state.batchDownloadTask, ...updates }
-            : null,
-        }));
       },
 
       setBatchDownloadProgress: (progress) => {
