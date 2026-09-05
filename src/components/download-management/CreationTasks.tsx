@@ -4,8 +4,10 @@ import { useDownloadStore } from '../../stores/download';
 import { Avatar, Button, Tooltip } from 'antd';
 import { buildUserUrl } from '../../twitter/url';
 import { QuestionCircleOutlined } from '@ant-design/icons';
+import { useTheme } from '../../App';
 
 export const CreationTasks: React.FC = () => {
+  const { isDark } = useTheme();
   const { creationTasks, removeCreationTask } = useDownloadStore((s) => ({
     creationTasks: s.creationTasks,
     removeCreationTask: s.removeCreationTask,
@@ -14,7 +16,14 @@ export const CreationTasks: React.FC = () => {
   if (creationTasks.length === 0) return null;
 
   return (
-    <section className="bg-white p-4 rounded-md border-[1px] mb-3">
+    <section
+      className="p-4 rounded-md border-[1px] mb-3"
+      style={{
+        backgroundColor: isDark ? '#1F1F1F' : '#ffffff',
+        borderColor: isDark ? '#38383a' : '#e5e5e7',
+        color: isDark ? '#f5f5f7' : '#1d1d1f',
+      }}
+    >
       <h2 className="text-sm">{`共 ${creationTasks.length} 个任务创建中`}</h2>
       <ul className="mt-2 text-sm space-y-4 max-h-40 overflow-y-auto">
         {creationTasks.map((t) => (
@@ -28,6 +37,7 @@ export const CreationTasks: React.FC = () => {
               target="_blank"
               rel="noreferrer"
               className="flex items-center space-x-1 overflow-hidden pr-4"
+              style={{ color: isDark ? '#f5f5f7' : '#1d1d1f' }}
             >
               <Avatar size={20} src={t.user.avatar} className="shrink-0" />
               <span className="whitespace-nowrap overflow-hidden text-ellipsis">

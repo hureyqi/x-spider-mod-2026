@@ -12,9 +12,11 @@ import { useHomepageStore } from '../../stores/homepage';
 import { buildPostUrl } from '../../twitter/url';
 import { InfiniteScroll } from '../InfiniteScroll';
 import { GridViewItemAction, GridViewItemActions } from './GridViewItemActions';
+import { useTheme } from '../../App';
 
 export const PostListGridView: React.FC = () => {
   const { message } = App.useApp();
+  const { isDark } = useTheme();
   const { userInfo, postList } = useHomepageStore((state) => ({
     postList: state.postList,
     userInfo: state.userInfo,
@@ -127,7 +129,8 @@ export const PostListGridView: React.FC = () => {
             <li
               tabIndex={0}
               key={media.id}
-              className="relative h-[12rem] overflow-hidden bg-white group"
+              className="relative h-[12rem] overflow-hidden group"
+              style={{ backgroundColor: isDark ? '#1F1F1F' : '#ffffff' }}
             >
               <div className="h-full">
                 <img
@@ -174,7 +177,8 @@ export const PostListGridView: React.FC = () => {
         })}
         {postList.loading && mediaList.length > 0 && (
           <li
-            className="h-[15rem] flex items-center justify-center bg-white"
+            className="h-[15rem] flex items-center justify-center"
+            style={{ backgroundColor: isDark ? '#1F1F1F' : '#ffffff' }}
             tabIndex={0}
           >
             <LoadingOutlined

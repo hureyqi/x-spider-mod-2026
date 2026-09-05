@@ -6,9 +6,11 @@ import MediaType from '../../enums/MediaType';
 import { DownloadFilter } from '../../interfaces/DownloadFilter';
 import { useDownloadStore } from '../../stores/download';
 import { useHomepageStore } from '../../stores/homepage';
+import { useTheme } from '../../App';
 
 export const DownloadController: React.FC = () => {
   const { message } = App.useApp();
+  const { isDark } = useTheme();
   const { filter, setFilter, user } = useHomepageStore((s) => ({
     filter: s.filter,
     setFilter: s.setFilter,
@@ -39,7 +41,13 @@ export const DownloadController: React.FC = () => {
   };
 
   return (
-    <section className="p-4 bg-white rounded-md mt-3 border-[1px]">
+    <section
+      className="p-4 rounded-md mt-3 border-[1px]"
+      style={{
+        backgroundColor: isDark ? '#1F1F1F' : '#ffffff',
+        borderColor: isDark ? '#38383a' : '#e5e5e7',
+      }}
+    >
       <h2 className="font-bold mb-4">下载配置</h2>
       <Form<DownloadFilter>
         layout="inline"

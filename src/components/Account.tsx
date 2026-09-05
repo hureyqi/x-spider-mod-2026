@@ -111,13 +111,21 @@ export const Account: React.FC = () => {
                 type="button"
                 aria-label="切换账户 / Cookie 池管理"
                 className="w-full flex flex-col items-center focus:outline-none"
+                style={{ backgroundColor: 'transparent' }}
               >
-                <Avatar size={50} src={active.info?.avatar || undefined}>
+                <Avatar
+                  size={50}
+                  src={active.info?.avatar || undefined}
+                  style={{
+                    backgroundColor: isDark ? '#3a3a3c' : '#e5e5e7',
+                    color: isDark ? '#CCCCCC' : '#6e6e73',
+                  }}
+                >
                   {active.info?.avatar ? undefined : displayName.slice(0, 1)}
                 </Avatar>
                 <span
                   className="mt-1 font-bold text-sm cursor-pointer"
-                  style={{ color: isDark ? '#f5f5f7' : '#1d1d1f' }}
+                  style={{ color: isDark ? '#FFFFFF' : '#1d1d1f' }}
                 >
                   {displayName}
                 </span>
@@ -133,10 +141,18 @@ export const Account: React.FC = () => {
             <button
               type="button"
               className="flex flex-col items-center cursor-pointer"
+              style={{ backgroundColor: 'transparent' }}
               onClick={openAddCookieModal}
               aria-label="添加 Cookie / 账户"
             >
-              <Avatar size={50} icon={<PlusOutlined />} />
+              <Avatar
+                size={50}
+                icon={<PlusOutlined />}
+                style={{
+                  backgroundColor: isDark ? '#3a3a3c' : '#e5e5e7',
+                  color: isDark ? '#CCCCCC' : '#6e6e73',
+                }}
+              />
               <span className="mt-1 text-sm" style={{ color: subColor }}>
                 添加 Cookie / 账户
               </span>
