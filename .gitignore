@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 
 /http
+
+# 本地 GitHub 网络配置（可能含 hosts/token 等敏感信息），防止误提交
+.ghconfig/
