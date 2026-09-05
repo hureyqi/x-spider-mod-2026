@@ -11,6 +11,7 @@ import { TwitterUser } from '../interfaces/TwitterUser';
 import { AriaStatus, aria2 } from '../utils/aria2';
 import { getUserMedias, getUserTweets } from '../twitter/api';
 import { useSettingsStore } from './settings';
+import { batchRunControl } from './batch-list';
 import { getDownloadUrl } from '../twitter/utils';
 import { resolveVariables } from '../utils/file-name-template';
 import { FileNameTemplateData } from '../interfaces/FileNameTemplateData';
@@ -435,6 +436,16 @@ async function runCreationTask(task: CreationTask, abortSignal: AbortSignal) {
       return;
     }
 
+    // 批量下载场景下响应「暂停」：在翻页间隙挂起，暂停期间不再继续抓取时间线
+    if (batchRunControl.isRunning) {
+      while (batchRunControl.isPaused && batchRunControl.isRunning) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      if (abortSignal.aborted) {
+        return;
+      }
+    }
+
     log().info('CreationTask fetching', nextCursor);
     const { twitterPosts, cursor } = await getListFn(user.id, nextCursor);
     if (abortSignal.aborted) break;
@@ -443,7 +454,7 @@ async function runCreationTask(task: CreationTask, abortSignal: AbortSignal) {
     log().info('Now', now.format('YYYY-MM-DD'), 'next cursor', nextCursor);
     const filteredPosts = twitterPosts.filter(
       R.allPass([
-        (post) => (post.medias ? post.medias.length >= 0 : false),
+        (post) => Boolean(post.medias && post.medias.length > 0),
         (post) => {
           if (!post.createdAt) return true;
           return until ? post.createdAt.isBefore(until) : true;
