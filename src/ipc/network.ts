@@ -107,6 +107,9 @@ export async function request(options: RequestOptions) {
         if (!cookieManager.hasAvailable()) break;
       }
 
+      // 命中跳过重试的状态码（如 queryId 已失效），立即抛错交给上层换候选
+      if (options.skipRetryStatuses?.includes(res.status)) break;
+
       log.warn(
         `Request failed (HTTP ${res.status}), attempt=${attempt + 1}/${maxAttempts}, retry in ${RETRY_DELAYS[attempt] ?? 0}ms`,
         { cookie: cookie ? '******' : undefined },

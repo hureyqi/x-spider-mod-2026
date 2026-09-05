@@ -1,6 +1,7 @@
 import dayjs from 'dayjs';
 import * as R from 'ramda';
 import { Response } from '../interfaces/Response';
+import { RequestOptions } from '../interfaces/RequestOptions';
 import { TwitterAccountInfo } from '../interfaces/TwitterAccountInfo';
 import {
   TwitterMedia,
@@ -13,6 +14,7 @@ import { TwitterPost } from '../interfaces/TwitterPost';
 import { TwitterUser } from '../interfaces/TwitterUser';
 import { request } from '../ipc/network';
 import MediaType from '../enums/MediaType';
+import { getCandidateQueryIds, GraphQLOperation } from './query-ids';
 
 const HOST = 'x.com';
 
@@ -41,6 +43,38 @@ function ensureResponse(response: Response) {
   }
 }
 
+/**
+ * 发起 GraphQL 请求：按 query-ids 配置依次尝试候选 queryId。
+ * 400/404 通常意味着该 queryId 已失效——非最后一个候选会跳过退避重试、
+ * 直接换下一个候选；全部候选耗尽后抛出最后一次错误。
+ */
+async function graphqlRequest(
+  operation: GraphQLOperation,
+  options: Omit<RequestOptions, 'url'>,
+): Promise<Response> {
+  const candidates = await getCandidateQueryIds(operation);
+  let lastErr: unknown;
+
+  for (let i = 0; i < candidates.length; i++) {
+    const isLast = i === candidates.length - 1;
+    try {
+      return await request({
+        ...options,
+        url: `https://${HOST}/i/api/graphql/${candidates[i]}/${operation}`,
+        skipRetryStatuses: isLast ? undefined : [400, 404],
+      });
+    } catch (err) {
+      lastErr = err;
+      log.warn(
+        `GraphQL ${operation} queryId=${candidates[i]} 请求失败${isLast ? '' : '，尝试备用 queryId'}`,
+        err,
+      );
+    }
+  }
+
+  throw lastErr;
+}
+
 export async function getAccountInfo(
   cookieStringOverride?: string,
 ): Promise<TwitterAccountInfo> {
@@ -66,10 +100,9 @@ export async function getAccountInfo(
 }
 
 export async function getUser(screenName: string): Promise<TwitterUser> {
-  const resp = await request({
+  const resp = await graphqlRequest('UserByScreenName', {
     method: 'GET',
     responseType: 'json',
-    url: `https://${HOST}/i/api/graphql/NimuplG1OB7Fd2btCLdBOw/UserByScreenName`,
     query: {
       features: JSON.stringify({
         hidden_profile_likes_enabled: true,
@@ -222,9 +255,8 @@ export async function getUserMedias(
   twitterPosts: TwitterPost[];
   cursor: string | null;
 }> {
-  const resp = await request({
+  const resp = await graphqlRequest('UserMedia', {
     method: 'GET',
-    url: `https://${HOST}/i/api/graphql/cEjpJXA15Ok78yO4TUQPeQ/UserMedia`,
     responseType: 'json',
     query: {
       features: JSON.stringify({
@@ -352,9 +384,8 @@ export async function getUserTweets(
   twitterPosts: TwitterPost[];
   cursor: string | null;
 }> {
-  const resp = await request({
+  const resp = await graphqlRequest('UserTweets', {
     method: 'GET',
-    url: `https://${HOST}/i/api/graphql/9zyyd1hebl7oNWIPdA8HRw/UserTweets`,
     responseType: 'json',
     query: {
       features: JSON.stringify({
