@@ -15,6 +15,7 @@ import {
   LoadingOutlined,
   PlayCircleOutlined,
   PauseCircleOutlined,
+  RedoOutlined,
   StopOutlined,
   DownloadOutlined,
   ClockCircleOutlined,
@@ -27,7 +28,7 @@ import { useDownloadStore } from '../../stores/download';
 import { getUser } from '../../twitter/api';
 import { TwitterUser } from '../../interfaces/TwitterUser';
 import MediaType from '../../enums/MediaType';
-import { notification as tauriNotification } from '@tauri-apps/api';
+import { notification as tauriNotification, shell } from '@tauri-apps/api';
 import dayjs, { Dayjs } from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -36,6 +37,21 @@ interface BatchListProgressProps {
   list: BatchList;
   onClose: () => void;
 }
+
+const buildMediaTypes = (filter: BatchList['filter']): MediaType[] => {
+  return filter.mediaTypes.map((type) => {
+    switch (type) {
+      case 'photo':
+        return MediaType.Photo;
+      case 'video':
+        return MediaType.Video;
+      case 'gif':
+        return MediaType.Gif;
+      default:
+        return MediaType.Photo;
+    }
+  });
+};
 
 export const BatchListProgress: React.FC<BatchListProgressProps> = ({
   list,
@@ -59,6 +75,8 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
   );
 
   const logsRef = useRef<string[]>([]);
+
+  const [verifyingFailed, setVerifyingFailed] = useState(false);
 
   useEffect(() => {
     if (batchDownloadProgress && batchDownloadProgress.listId === list.id) {
@@ -154,18 +172,7 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
       try {
         const user: TwitterUser = await getUser(account);
 
-        const mediaTypes = list.filter.mediaTypes.map((type) => {
-          switch (type) {
-            case 'photo':
-              return MediaType.Photo;
-            case 'video':
-              return MediaType.Video;
-            case 'gif':
-              return MediaType.Gif;
-            default:
-              return MediaType.Photo;
-          }
-        });
+        const mediaTypes = buildMediaTypes(list.filter);
 
         const dr = effectiveDateRange
           ? ([
@@ -305,6 +312,94 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
     removeAccountsFromList,
     updateBatchDownloadProgress,
   ]);
+
+  const handleRetryFailed = useCallback(async () => {
+    if (failedAccounts.length === 0 || verifyingFailed) return;
+    setVerifyingFailed(true);
+
+    const mediaTypes = buildMediaTypes(list.filter);
+    const effectiveDateRange = dateRange
+      ? ([dateRange[0].unix(), dateRange[1].unix()] as [number, number])
+      : list.filter.dateRange;
+    const dr = effectiveDateRange
+      ? ([
+          dayjs(effectiveDateRange[0] * 1000),
+          dayjs(effectiveDateRange[1] * 1000),
+        ] as [dayjs.Dayjs, dayjs.Dayjs])
+      : undefined;
+
+    logsRef.current.push(
+      `[${dayjs().format('HH:mm:ss')}] 开始重新验证 ${failedAccounts.length} 个失败账户`,
+    );
+    updateBatchDownloadProgress({ logs: [...logsRef.current] });
+
+    for (const account of [...failedAccounts]) {
+      logsRef.current.push(
+        `[${dayjs().format('HH:mm:ss')}] 正在重新验证 @${account}`,
+      );
+      updateBatchDownloadProgress({ logs: [...logsRef.current] });
+
+      try {
+        const user: TwitterUser = await getUser(account);
+        createCreationTask(user, {
+          mediaTypes,
+          source: list.filter.source,
+          dateRange: dr,
+        });
+
+        logsRef.current.push(
+          `[${dayjs().format('HH:mm:ss')}] ✓ @${account} 重新验证成功，任务已创建`,
+        );
+        const latest = useBatchListStore.getState().batchDownloadProgress;
+        updateBatchDownloadProgress({
+          completedAccounts: [...(latest?.completedAccounts || []), account],
+          failedAccounts: (latest?.failedAccounts || []).filter(
+            (a) => a !== account,
+          ),
+          successCount: (latest?.successCount || 0) + 1,
+          failCount: Math.max((latest?.failCount || 0) - 1, 0),
+          logs: [...logsRef.current],
+        });
+        notification.success({
+          message: `@${account} 重新验证成功`,
+          description: '已创建下载任务',
+        });
+      } catch (err: any) {
+        logsRef.current.push(
+          `[${dayjs().format('HH:mm:ss')}]  @${account} 重新验证失败: ${err.message}`,
+        );
+        updateBatchDownloadProgress({ logs: [...logsRef.current] });
+        notification.warning({
+          message: `账户 ${account} 重新验证失败`,
+          description: err.message,
+        });
+        tauriNotification.sendNotification({
+          title: '批量下载提醒',
+          body: `@${account} 重新验证失败: ${err.message}`,
+        });
+      }
+    }
+
+    logsRef.current.push(`[${dayjs().format('HH:mm:ss')}] 重新验证完成`);
+    updateBatchDownloadProgress({ logs: [...logsRef.current] });
+    setVerifyingFailed(false);
+  }, [
+    failedAccounts,
+    verifyingFailed,
+    dateRange,
+    list,
+    createCreationTask,
+    updateBatchDownloadProgress,
+  ]);
+
+  const handleOpenProfile = useCallback((account: string) => {
+    shell.open(`https://twitter.com/${account}`).catch(() => {
+      notification.warning({
+        message: '打开链接失败',
+        description: `无法打开 https://twitter.com/${account}`,
+      });
+    });
+  }, []);
 
   return (
     <div
@@ -726,6 +821,29 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
         >
           重置
         </Button>
+
+        <Button
+          icon={<RedoOutlined />}
+          onClick={handleRetryFailed}
+          disabled={
+            isRunning ||
+            isPaused ||
+            verifyingFailed ||
+            failedAccounts.length === 0
+          }
+          loading={verifyingFailed}
+          style={{
+            background: 'rgba(239,68,68,0.1)',
+            borderColor: 'rgba(239,68,68,0.3)',
+            color: '#ef4444',
+            borderRadius: 8,
+            padding: '6px 20px',
+            height: 36,
+            fontSize: 14,
+          }}
+        >
+          失败验证
+        </Button>
       </div>
 
       {(completedAccounts.length > 0 || failedAccounts.length > 0) && (
@@ -762,6 +880,8 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
                   {completedAccounts.map((account) => (
                     <Tag
                       key={account}
+                      onClick={() => handleOpenProfile(account)}
+                      title={`在浏览器中打开 https://twitter.com/${account}`}
                       style={{
                         background: 'rgba(34,197,94,0.1)',
                         color: '#4ade80',
@@ -770,6 +890,7 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
                         padding: '2px 8px',
                         fontSize: 11,
                         margin: 0,
+                        cursor: 'pointer',
                       }}
                     >
                       @{account}
@@ -829,6 +950,8 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
                   {failedAccounts.map((account) => (
                     <Tag
                       key={account}
+                      onClick={() => handleOpenProfile(account)}
+                      title={`在浏览器中打开 https://twitter.com/${account}`}
                       style={{
                         background: 'rgba(239,68,68,0.1)',
                         color: '#ef4444',
@@ -837,6 +960,7 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
                         padding: '2px 8px',
                         fontSize: 11,
                         margin: 0,
+                        cursor: 'pointer',
                       }}
                     >
                       @{account}
