@@ -53,6 +53,30 @@ const buildMediaTypes = (filter: BatchList['filter']): MediaType[] => {
   });
 };
 
+// ==============================================
+// 【方案C】日志与已完成/失败标签限量，避免几千账户下全量复制与
+// 全量 DOM 渲染导致的卡顿。
+// ==============================================
+const MAX_LOG_ENTRIES = 300;
+const MAX_TAG_ITEMS = 50;
+
+/** 仅保留最近 MAX_LOG_ENTRIES 条日志，控制日志数组规模为常数级 */
+function trimLogs(logs: string[]): string[] {
+  return logs.length > MAX_LOG_ENTRIES
+    ? logs.slice(logs.length - MAX_LOG_ENTRIES)
+    : logs;
+}
+
+/** 账户 A 只渲染最近 MAX_TAG_ITEMS 个标签，并用占位符表示其余数量 */
+function trimAccounts(accounts: string[]): { shown: string[]; hidden: number } {
+  return accounts.length > MAX_TAG_ITEMS
+    ? {
+        shown: accounts.slice(accounts.length - MAX_TAG_ITEMS),
+        hidden: accounts.length - MAX_TAG_ITEMS,
+      }
+    : { shown: accounts, hidden: 0 };
+}
+
 export const BatchListProgress: React.FC<BatchListProgressProps> = ({
   list,
 }) => {
@@ -145,7 +169,7 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
     for (let i = 0; i < list.accounts.length; i++) {
       if (!batchRunControl.isRunning) {
         logsRef.current.push(`[${dayjs().format('HH:mm:ss')}] 下载已停止`);
-        updateBatchDownloadProgress({ logs: [...logsRef.current] });
+        updateBatchDownloadProgress({ logs: trimLogs(logsRef.current) });
         break;
       }
 
@@ -155,7 +179,7 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
 
       if (!batchRunControl.isRunning) {
         logsRef.current.push(`[${dayjs().format('HH:mm:ss')}] 下载已停止`);
-        updateBatchDownloadProgress({ logs: [...logsRef.current] });
+        updateBatchDownloadProgress({ logs: trimLogs(logsRef.current) });
         break;
       }
 
@@ -166,7 +190,7 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
       updateBatchDownloadProgress({
         currentIndex: i,
         currentAccount: account,
-        logs: [...logsRef.current],
+        logs: trimLogs(logsRef.current),
       });
 
       try {
@@ -196,7 +220,7 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
         updateBatchDownloadProgress({
           completedAccounts: [...(latest?.completedAccounts || []), account],
           successCount: (latest?.successCount || 0) + 1,
-          logs: completed,
+          logs: trimLogs(completed),
         });
 
         await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -210,7 +234,7 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
         updateBatchDownloadProgress({
           failedAccounts: [...(latest2?.failedAccounts || []), account],
           failCount: (latest2?.failCount || 0) + 1,
-          logs: failed,
+          logs: trimLogs(failed),
         });
 
         notification.warning({
@@ -234,7 +258,7 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
     updateBatchDownloadProgress({
       isRunning: false,
       isPaused: false,
-      logs: done,
+      logs: trimLogs(done),
     });
   }, [
     list,
@@ -251,7 +275,7 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
       logsRef.current.push(`[${dayjs().format('HH:mm:ss')}] 暂停下载`);
       updateBatchDownloadProgress({
         isPaused: true,
-        logs: [...logsRef.current],
+        logs: trimLogs(logsRef.current),
       });
     }
   }, [updateBatchDownloadProgress]);
@@ -262,7 +286,7 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
       logsRef.current.push(`[${dayjs().format('HH:mm:ss')}] 继续下载`);
       updateBatchDownloadProgress({
         isPaused: false,
-        logs: [...logsRef.current],
+        logs: trimLogs(logsRef.current),
       });
     }
   }, [updateBatchDownloadProgress]);
@@ -279,7 +303,7 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
       updateBatchDownloadProgress({
         isRunning: false,
         isPaused: false,
-        logs: [...logsRef.current],
+        logs: trimLogs(logsRef.current),
       });
     }
   }, [updateBatchDownloadProgress]);
@@ -301,7 +325,7 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
     logsRef.current.push(
       `[${dayjs().format('HH:mm:ss')}] 已删除 ${failedAccounts.length} 个失败账户`,
     );
-    updateBatchDownloadProgress({ logs: [...logsRef.current] });
+    updateBatchDownloadProgress({ logs: trimLogs(logsRef.current) });
     notification.success({
       message: '删除成功',
       description: `已移除 ${failedAccounts.length} 个失败账户`,
@@ -331,13 +355,13 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
     logsRef.current.push(
       `[${dayjs().format('HH:mm:ss')}] 开始重新验证 ${failedAccounts.length} 个失败账户`,
     );
-    updateBatchDownloadProgress({ logs: [...logsRef.current] });
+    updateBatchDownloadProgress({ logs: trimLogs(logsRef.current) });
 
     for (const account of [...failedAccounts]) {
       logsRef.current.push(
         `[${dayjs().format('HH:mm:ss')}] 正在重新验证 @${account}`,
       );
-      updateBatchDownloadProgress({ logs: [...logsRef.current] });
+      updateBatchDownloadProgress({ logs: trimLogs(logsRef.current) });
 
       try {
         const user: TwitterUser = await getUser(account);
@@ -358,7 +382,7 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
           ),
           successCount: (latest?.successCount || 0) + 1,
           failCount: Math.max((latest?.failCount || 0) - 1, 0),
-          logs: [...logsRef.current],
+          logs: trimLogs(logsRef.current),
         });
         notification.success({
           message: `@${account} 重新验证成功`,
@@ -368,7 +392,7 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
         logsRef.current.push(
           `[${dayjs().format('HH:mm:ss')}]  @${account} 重新验证失败: ${err.message}`,
         );
-        updateBatchDownloadProgress({ logs: [...logsRef.current] });
+        updateBatchDownloadProgress({ logs: trimLogs(logsRef.current) });
         notification.warning({
           message: `账户 ${account} 重新验证失败`,
           description: err.message,
@@ -381,7 +405,7 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
     }
 
     logsRef.current.push(`[${dayjs().format('HH:mm:ss')}] 重新验证完成`);
-    updateBatchDownloadProgress({ logs: [...logsRef.current] });
+    updateBatchDownloadProgress({ logs: trimLogs(logsRef.current) });
     setVerifyingFailed(false);
   }, [
     failedAccounts,
@@ -877,25 +901,44 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
                   </Text>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {completedAccounts.map((account) => (
-                    <Tag
-                      key={account}
-                      onClick={() => handleOpenProfile(account)}
-                      title={`在浏览器中打开 https://twitter.com/${account}`}
-                      style={{
-                        background: 'rgba(34,197,94,0.1)',
-                        color: '#4ade80',
-                        border: '1px solid rgba(34,197,94,0.2)',
-                        borderRadius: 6,
-                        padding: '2px 8px',
-                        fontSize: 11,
-                        margin: 0,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      @{account}
-                    </Tag>
-                  ))}
+                  {(() => {
+                    const { shown, hidden } = trimAccounts(completedAccounts);
+                    return (
+                      <>
+                        {shown.map((account) => (
+                          <Tag
+                            key={account}
+                            onClick={() => handleOpenProfile(account)}
+                            title={`在浏览器中打开 https://twitter.com/${account}`}
+                            style={{
+                              background: 'rgba(34,197,94,0.1)',
+                              color: '#4ade80',
+                              border: '1px solid rgba(34,197,94,0.2)',
+                              borderRadius: 6,
+                              padding: '2px 8px',
+                              fontSize: 11,
+                              margin: 0,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            @{account}
+                          </Tag>
+                        ))}
+                        {hidden > 0 && (
+                          <Tag
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#8b949e',
+                              fontSize: 11,
+                            }}
+                          >
+                            及另外 {hidden} 个
+                          </Tag>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             </Col>
@@ -947,25 +990,44 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
                   </Button>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {failedAccounts.map((account) => (
-                    <Tag
-                      key={account}
-                      onClick={() => handleOpenProfile(account)}
-                      title={`在浏览器中打开 https://twitter.com/${account}`}
-                      style={{
-                        background: 'rgba(239,68,68,0.1)',
-                        color: '#ef4444',
-                        border: '1px solid rgba(239,68,68,0.2)',
-                        borderRadius: 6,
-                        padding: '2px 8px',
-                        fontSize: 11,
-                        margin: 0,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      @{account}
-                    </Tag>
-                  ))}
+                  {(() => {
+                    const { shown, hidden } = trimAccounts(failedAccounts);
+                    return (
+                      <>
+                        {shown.map((account) => (
+                          <Tag
+                            key={account}
+                            onClick={() => handleOpenProfile(account)}
+                            title={`在浏览器中打开 https://twitter.com/${account}`}
+                            style={{
+                              background: 'rgba(239,68,68,0.1)',
+                              color: '#ef4444',
+                              border: '1px solid rgba(239,68,68,0.2)',
+                              borderRadius: 6,
+                              padding: '2px 8px',
+                              fontSize: 11,
+                              margin: 0,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            @{account}
+                          </Tag>
+                        ))}
+                        {hidden > 0 && (
+                          <Tag
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#8b949e',
+                              fontSize: 11,
+                            }}
+                          >
+                            及另外 {hidden} 个
+                          </Tag>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             </Col>

@@ -114,6 +114,21 @@ async function prepareDownloadTask({
 
 const creationTaskAbortControllerMap = new Map<string, AbortController>();
 
+// ==============================================
+// 【方案A】gid → 数组下标缓存，将 updateDownloadTask / batchUpdate
+// 从「全量 findIndex / 全量 map 重建」降为 O(1) 定位 + 仅替换变化项。
+// 数组本身不可变，但仍可避免重复线性查找与 fromPairs 全量构建。
+// ==============================================
+let taskIndexByGid = new Map<string, number>();
+
+function rebuildTaskIndex(tasks: DownloadTask[]) {
+  taskIndexByGid = new Map(tasks.map((t, i) => [t.gid, i] as const));
+}
+
+function getTaskIndex(gid: string): number {
+  return taskIndexByGid.get(gid) ?? -1;
+}
+
 export interface DownloadStore {
   currentTab: string;
   setCurrentTab: (tab: string) => void;
@@ -163,46 +178,41 @@ export const useDownloadStore = create<DownloadStore>((set, get) => ({
     const status = await aria2.tellStatus(task.gid);
     task.status = status.status;
 
-    set({
-      downloadTasks: get().downloadTasks.concat(task),
-    });
+    const newTasks = get().downloadTasks.concat(task);
+    rebuildTaskIndex(newTasks);
+    set({ downloadTasks: newTasks });
   },
   updateDownloadTask: (task, now = Date.now()) => {
     const oldTasks = get().downloadTasks;
-    const oldTaskIndex = get().downloadTasks.findIndex(
-      (t) => t.gid === task.gid,
-    );
+    const oldTaskIndex = getTaskIndex(task.gid);
     if (oldTaskIndex === -1) return;
     const oldTask = oldTasks[oldTaskIndex];
     if (oldTask.updatedAt > now) return;
-    const newTasks = R.adjust(oldTaskIndex, R.always(task))(oldTasks);
-    set({
-      downloadTasks: newTasks,
-    });
+    const newTasks = oldTasks.slice();
+    newTasks[oldTaskIndex] = task;
+    set({ downloadTasks: newTasks });
   },
-  batchUpdateDownloadTasks: (tasks) => {
+  batchUpdateDownloadTasks: (updates) => {
     const { downloadTasks: oldTasks } = get();
-    const newTaskMap = R.pipe<
-      [DownloadTask[]],
-      [DownloadTask['gid'], DownloadTask][],
-      Record<string, DownloadTask>
-    >(
-      R.map((t: DownloadTask) => [t.gid, t]),
-      R.fromPairs,
-    )(tasks);
+
+    // 根据 gid → index 缓存，仅构建被更新的任务映射（避免全量 R.fromPairs）
+    const updateMap = new Map<DownloadTask['gid'], DownloadTask>();
+    for (const task of updates) {
+      const idx = getTaskIndex(task.gid);
+      if (idx === -1) continue;
+      const oldTask = oldTasks[idx];
+      if (task.updatedAt < oldTask.updatedAt) continue;
+      updateMap.set(task.gid, task);
+    }
+
+    // 没有任何实际变化时不做 set，避免触发无谓的全量重渲染
+    if (updateMap.size === 0) return;
 
     const newTasks = oldTasks.map((oldTask) => {
-      const newTask = newTaskMap[oldTask.gid];
-      if (!newTask) return oldTask;
-      if (newTask.updatedAt < oldTask.updatedAt) {
-        return oldTask;
-      }
-      return newTask;
+      const newTask = updateMap.get(oldTask.gid);
+      return newTask || oldTask;
     });
-
-    set({
-      downloadTasks: newTasks,
-    });
+    set({ downloadTasks: newTasks });
   },
   batchCreateDownloadTask: async (paramsList) => {
     const tasks: DownloadTask[] = [];
@@ -239,6 +249,7 @@ export const useDownloadStore = create<DownloadStore>((set, get) => ({
     });
 
     const newTasks = get().downloadTasks.concat(tasks);
+    rebuildTaskIndex(newTasks);
     set({
       downloadTasks: newTasks,
     });
@@ -260,10 +271,12 @@ export const useDownloadStore = create<DownloadStore>((set, get) => ({
       log().warn('Remove aria2 task failed', { gid, err });
     });
     const state = get();
+    const newTasks = R.filter((v: DownloadTask) => v.gid !== gid)(
+      state.downloadTasks,
+    );
+    rebuildTaskIndex(newTasks);
     set({
-      downloadTasks: R.filter((v: DownloadTask) => v.gid !== gid)(
-        state.downloadTasks,
-      ),
+      downloadTasks: newTasks,
       autoSyncTaskIds: R.filter((v: string) => v !== gid)(
         state.autoSyncTaskIds,
       ),
@@ -280,10 +293,12 @@ export const useDownloadStore = create<DownloadStore>((set, get) => ({
       .catch((err) => {
         log().error({ gids, err });
       });
+    const newTasks = R.filter((v: DownloadTask) => !gids.includes(v.gid))(
+      get().downloadTasks,
+    );
+    rebuildTaskIndex(newTasks);
     set({
-      downloadTasks: R.filter((v: DownloadTask) => !gids.includes(v.gid))(
-        get().downloadTasks,
-      ),
+      downloadTasks: newTasks,
     });
   },
   redownloadTask: async (gid) => {
@@ -346,8 +361,10 @@ export const useDownloadStore = create<DownloadStore>((set, get) => ({
         const status = await aria2.tellStatus(task.gid);
         newTask.status = status.status;
 
+        const newTasks = get().downloadTasks.concat(newTask);
+        rebuildTaskIndex(newTasks);
         set({
-          downloadTasks: get().downloadTasks.concat(newTask),
+          downloadTasks: newTasks,
         });
       } else {
         const newTask = await mergeAriaStatusToDownloadTask(status, task);
@@ -600,27 +617,32 @@ async function scheduleAutoSyncTasks() {
   const resultMap = await aria2.tellStatus(ids);
   const { downloadTasks, batchUpdateDownloadTasks } =
     useDownloadStore.getState();
-  const newTasks = await Promise.all(
-    downloadTasks.map<Promise<DownloadTask>>(async (oldTask) => {
-      if (oldTask.updatedAt > now) return oldTask;
-      if (!resultMap[oldTask.gid]) return oldTask;
-      return mergeAriaStatusToDownloadTask(
-        resultMap[oldTask.gid],
-        oldTask,
-        now,
-      );
-    }),
-  );
 
-  batchUpdateDownloadTasks(newTasks);
-
-  // 下载自此轮进入 complete -> 触发后处理（Sidecar 元数据 / LLM 打标）
+  // 仅对「屏幕上可见」的 gid 做增量更新，避免对全量任务数组做 map / Promise.all
+  const updateTasks: DownloadTask[] = [];
   const oldStatusMap = new Map(downloadTasks.map((t) => [t.gid, t.status]));
-  for (const nt of newTasks) {
-    if (nt.status === 'complete' && oldStatusMap.get(nt.gid) !== 'complete') {
-      runPostProcess(nt).catch((err) => {
-        log().error('runPostProcess failed', err);
-      });
+  for (const gid of ids) {
+    const idx = getTaskIndex(gid);
+    if (idx === -1) continue;
+    const oldTask = downloadTasks[idx];
+    if (oldTask.updatedAt > now) continue;
+    const ariaStatus = resultMap[gid];
+    if (!ariaStatus) continue;
+    updateTasks.push(
+      await mergeAriaStatusToDownloadTask(ariaStatus, oldTask, now),
+    );
+  }
+
+  if (updateTasks.length > 0) {
+    batchUpdateDownloadTasks(updateTasks);
+
+    // 下载自此轮进入 complete -> 触发后处理（Sidecar 元数据 / LLM 打标）
+    for (const nt of updateTasks) {
+      if (nt.status === 'complete' && oldStatusMap.get(nt.gid) !== 'complete') {
+        runPostProcess(nt).catch((err) => {
+          log().error('runPostProcess failed', err);
+        });
+      }
     }
   }
 
