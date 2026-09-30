@@ -306,6 +306,35 @@ export const BatchListManager: React.FC = () => {
       ),
     },
     {
+      title: '最后同步',
+      dataIndex: 'lastUsedAt',
+      key: 'lastUsedAt',
+      width: 150,
+      render: (time: number) =>
+        time ? (
+          <Tag
+            icon={<ClockCircleOutlined />}
+            title={`最后同步：${dayjs(time).format('YYYY-MM-DD HH:mm:ss')}`}
+            style={{
+              color: isDark ? '#4ade80' : '#1a7f37',
+              background: isDark
+                ? 'rgba(34,197,94,0.12)'
+                : 'rgba(26,127,55,0.08)',
+              borderColor: isDark
+                ? 'rgba(34,197,94,0.3)'
+                : 'rgba(26,127,55,0.2)',
+              borderRadius: 6,
+            }}
+          >
+            {dayjs(time).fromNow()}
+          </Tag>
+        ) : (
+          <span style={{ color: isDark ? '#6e6e73' : '#b0b0b4' }}>
+            从未同步
+          </span>
+        ),
+    },
+    {
       title: '媒体类型',
       dataIndex: 'filter',
       key: 'filter',
