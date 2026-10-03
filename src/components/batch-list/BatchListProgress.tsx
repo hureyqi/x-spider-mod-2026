@@ -22,7 +22,11 @@ import {
   ThunderboltOutlined,
 } from '@ant-design/icons';
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { useBatchListStore, batchRunControl } from '../../stores/batch-list';
+import {
+  useBatchListStore,
+  batchRunControl,
+  syncFlowControl,
+} from '../../stores/batch-list';
 import { BatchList } from '../../interfaces/BatchList';
 import { useDownloadStore } from '../../stores/download';
 import { getUser } from '../../twitter/api';
@@ -174,6 +178,21 @@ export const BatchListProgress: React.FC<BatchListProgressProps> = ({
       }
 
       while (batchRunControl.isPaused && batchRunControl.isRunning) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
+      if (!batchRunControl.isRunning) {
+        logsRef.current.push(`[${dayjs().format('HH:mm:ss')}] 下载已停止`);
+        updateBatchDownloadProgress({ logs: trimLogs(logsRef.current) });
+        break;
+      }
+
+      // 【并发控制】自动暂停期间挂起，直到恢复（不创建新的博主同步）
+      while (
+        syncFlowControl.paused &&
+        batchRunControl.isRunning &&
+        !batchRunControl.isPaused
+      ) {
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
 

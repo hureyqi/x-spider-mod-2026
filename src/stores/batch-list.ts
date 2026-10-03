@@ -25,10 +25,23 @@ export const batchRunControl = {
   isPaused: false,
 };
 
+/**
+ * 共享运行态：并发控制。
+ * 博主同步任务数 ≥ 10 或 排队文件数 > 100 → paused=true（暂停启动新的博主同步）；
+ * 博主同步任务数 ≤ 5 或 排队文件数 ≤ 20 → paused=false（恢复）。
+ */
+export const syncFlowControl = {
+  paused: false,
+};
+
 export interface BatchListStore {
   batchLists: BatchList[];
   currentBatchListId: string | null;
   batchDownloadProgress: BatchDownloadProgress | null;
+
+  /** 侧边栏「一键下载全部列表」的同步时间范围：1=1天 2=3天 3=7天 4=全部 */
+  syncRange: 1 | 2 | 3 | 4;
+  setSyncRange: (range: 1 | 2 | 3 | 4) => void;
 
   controlBatchRun: (opts: { running?: boolean; paused?: boolean }) => void;
   getBatchRunControl: () => { isRunning: boolean; isPaused: boolean };
@@ -72,6 +85,8 @@ export const useBatchListStore = create<BatchListStore>()(
       batchLists: [],
       currentBatchListId: null,
       batchDownloadProgress: null,
+      syncRange: 4,
+      setSyncRange: (range) => set({ syncRange: range }),
 
       controlBatchRun: (opts) => {
         if (opts.running !== undefined)

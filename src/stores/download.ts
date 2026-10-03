@@ -11,7 +11,7 @@ import { TwitterUser } from '../interfaces/TwitterUser';
 import { AriaStatus, aria2 } from '../utils/aria2';
 import { getUserMedias, getUserTweets } from '../twitter/api';
 import { useSettingsStore } from './settings';
-import { batchRunControl } from './batch-list';
+import { batchRunControl, syncFlowControl } from './batch-list';
 import { getDownloadUrl } from '../twitter/utils';
 import { resolveVariables } from '../utils/file-name-template';
 import { FileNameTemplateData } from '../interfaces/FileNameTemplateData';
@@ -245,7 +245,8 @@ export const useDownloadStore = create<DownloadStore>((set, get) => ({
 
     tasks.forEach((task, index) => {
       task.gid = gids[index];
-      task.status = statusMap[task.gid].status;
+      const st = statusMap[task.gid];
+      task.status = st?.status || AriaStatus.Waiting;
     });
 
     const newTasks = get().downloadTasks.concat(tasks);
@@ -430,6 +431,14 @@ async function runCreationTask(task: CreationTask, abortSignal: AbortSignal) {
   log().info('Run creation task', task);
   const { filter, user } = task;
 
+  // 【运行状态】开始解析该博主
+  setSyncStatus({
+    phase: 'parsing',
+    handle: user.screenName,
+    label: '',
+    startedAt: Date.now(),
+  });
+
   const { batchCreateDownloadTask, updateCreationTask } =
     useDownloadStore.getState();
   const settings = useSettingsStore.getState();
@@ -548,6 +557,14 @@ async function runCreationTask(task: CreationTask, abortSignal: AbortSignal) {
 
     if (abortSignal.aborted) break;
   }
+
+  // 【运行状态】该博主解析完成，进入下载阶段（aria2 后台继续下载文件）
+  setSyncStatus({
+    phase: 'downloading',
+    handle: user.screenName,
+    label: '',
+    startedAt: Date.now(),
+  });
 }
 
 // Schedules creation tasks
@@ -565,6 +582,10 @@ async function scheduleCreationTasks() {
     requestIdleCallback(scheduleCreationTasks);
     return;
   }
+
+  // 【并发控制】暂停只阻止「新增」博主同步（一键循环/批量循环已 waitForResume 挂起），
+  // 已排队 waiting 的任务必须继续执行消化，否则队列冻结、永远无法恢复 → 死锁。
+  // 这里不检查 paused，直接从队列头部继续取任务执行。
 
   // Pick one waiting task from head
   const task = R.head(creationTasks) as CreationTask;
@@ -603,6 +624,102 @@ async function scheduleCreationTasks() {
 }
 
 scheduleCreationTasks();
+
+// ==============================================
+// 【运行状态】全局实时状态：供侧边栏展示当前正在做什么（解析/下载/暂停/空闲）
+// ==============================================
+export interface SyncStatusInfo {
+  /** 当前阶段：空闲 / 解析博主 / 下载中 / 并发控制暂停 */
+  phase: 'idle' | 'parsing' | 'downloading' | 'paused';
+  /** 当前处理的博主 @xxx */
+  handle: string | null;
+  /** 附加说明（如并发控制暂停原因） */
+  label: string;
+  /** 本阶段开始时间戳（用于显示已耗时，识别长期卡在某个博主） */
+  startedAt: number;
+}
+
+let syncStatus: SyncStatusInfo = {
+  phase: 'idle',
+  handle: null,
+  label: '',
+  startedAt: 0,
+};
+const syncStatusListeners = new Set<() => void>();
+
+export function getSyncStatus(): SyncStatusInfo {
+  return syncStatus;
+}
+
+export function subscribeSyncStatus(listener: () => void): () => void {
+  syncStatusListeners.add(listener);
+  return () => {
+    syncStatusListeners.delete(listener);
+  };
+}
+
+export function setSyncStatus(next: Partial<SyncStatusInfo>): void {
+  syncStatus = { ...syncStatus, ...next };
+  syncStatusListeners.forEach((listener) => listener());
+}
+
+// ==============================================
+// 【并发控制】每 1s 评估一次：
+//   博主同步任务数(creationTasks) ≥ 10 或 排队文件数(waiting) > 100 → 暂停新同步
+//   博主同步任务数 ≤ 5 或 排队文件数 ≤ 20 → 恢复
+// ==============================================
+const SYNC_PAUSE_BLOGGER = 10;
+const SYNC_RESUME_BLOGGER = 5;
+const SYNC_PAUSE_QUEUE = 100;
+const SYNC_RESUME_QUEUE = 20;
+
+function evaluateSyncFlow() {
+  const { creationTasks, downloadTasks } = useDownloadStore.getState();
+  const bloggerCount = creationTasks.length;
+  const queuedFiles = downloadTasks.filter(
+    (t) => t.status === AriaStatus.Waiting,
+  ).length;
+
+  if (!syncFlowControl.paused) {
+    // 暂停：任一指标超限即暂停（避免继续堆积）
+    if (bloggerCount >= SYNC_PAUSE_BLOGGER || queuedFiles > SYNC_PAUSE_QUEUE) {
+      syncFlowControl.paused = true;
+      setSyncStatus({
+        phase: 'paused',
+        handle: syncStatus.handle,
+        label: '并发控制暂停，等待队列消化',
+        startedAt: Date.now(),
+      });
+      log().info(
+        `[并发控制] 暂停新同步：博主任务 ${bloggerCount}/${SYNC_PAUSE_BLOGGER}，排队文件 ${queuedFiles}/${SYNC_PAUSE_QUEUE}`,
+      );
+    }
+  } else if (
+    // 恢复：两项指标都必须回落到低阈值，才恢复（滞回，防止单项恒低时反复切换）
+    bloggerCount <= SYNC_RESUME_BLOGGER &&
+    queuedFiles <= SYNC_RESUME_QUEUE
+  ) {
+    syncFlowControl.paused = false;
+    log().info(
+      `[并发控制] 恢复新同步：博主任务 ${bloggerCount}/${SYNC_RESUME_BLOGGER}，排队文件 ${queuedFiles}/${SYNC_RESUME_QUEUE}`,
+    );
+  }
+
+  // 全部工作结束 → 回到空闲（博主同步为空、无排队/下载/暂停中的文件）
+  const activeFiles = downloadTasks.filter(
+    (t) =>
+      t.status === AriaStatus.Waiting ||
+      t.status === AriaStatus.Active ||
+      t.status === AriaStatus.Paused,
+  ).length;
+  if (bloggerCount === 0 && activeFiles === 0 && !syncFlowControl.paused) {
+    if (syncStatus.phase !== 'idle') {
+      setSyncStatus({ phase: 'idle', handle: null, label: '', startedAt: 0 });
+    }
+  }
+}
+
+setInterval(evaluateSyncFlow, 1000);
 
 const INTERVAL = 500;
 // Auto sync tasks
